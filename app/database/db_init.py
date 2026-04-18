@@ -1,10 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
-from fastapi import Depends
 from contextlib import asynccontextmanager
 
+from app.common.core import get_database_settings, DatabaseSettings
 from .tables import Base
-from app.core import get_database_settings, DatabaseSettings
-
 
 class DatabaseManager:
     def __init__(self, settings: DatabaseSettings):

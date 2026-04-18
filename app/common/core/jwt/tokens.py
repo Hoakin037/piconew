@@ -1,3 +1,5 @@
+from uuid import UUID
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import (
     encode,
     decode,
@@ -9,8 +11,11 @@ from fastapi import HTTPException, Depends
 from datetime import datetime, timezone, timedelta
 from typing import Literal
 
-from app.core import JWTConfig, get_jwt_config
+from typing import Annotated
 
+from app.common.core.jwt.jwt_config import JWTConfig, get_jwt_config
+
+security = HTTPBearer()
 
 class JWTManager:
     def __init__(self, config: JWTConfig):
@@ -41,23 +46,36 @@ class JWTManager:
             algorithm=self.config.JWT_ALGORITHM,
         )
 
-    async def decode_token(self, token: str) -> int:
+    async def decode_token(self, token: str) -> UUID:
         """
-        Returns user_id from token
+        Returns user_sid from token
         """
         try:
             payload = decode(
                 token, self.config.JWT_SECRET_KEY, self.config.JWT_ALGORITHM
             )
-            user_id = payload.get("sub")
-            return int(user_id)
+            user_sid = payload.get("sub")
+            return user_sid
         except (ExpiredSignatureError, InvalidSignatureError, DecodeError):
             raise HTTPException(status_code=401, detail="Ошибка валидации jwt токена.")
 
     @property
     def get_refresh_token_ttl_seconds(self) -> int:
-        return self._jwt_manager.config.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+        return self.config.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
 
 
-def get_jwt_manager(config: JWTConfig = Depends(get_jwt_config)):
+
+def get_jwt_manager(config: Annotated[JWTConfig, Depends(get_jwt_config)]):
     return JWTManager(config)
+
+async def get_current_user(
+        jwt_manager: Annotated[JWTManager, Depends(get_jwt_manager)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
+) -> UUID:
+    if credentials:
+        access_token = credentials.credentials
+        user_sid = await jwt_manager.decode_token(access_token)
+
+        return user_sid
+
+    raise HTTPException(status_code=401, detail="Токен некорректный или отсутсвует")

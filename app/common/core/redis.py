@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from redis import RedisError
 from redis.asyncio import Redis
 from fastapi import Request
@@ -16,7 +18,7 @@ class RedisConfig(BaseSettings):
     REDIS_PASSWORD: str
 
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).resolve().parent.parent.parent / ".env",
+        env_file=Path(__file__).resolve().parent.parent.parent.parent / ".env",
         env_file_encoding="utf-8",
         extra="ignore",
         arbitrary_types_allowed=True,
@@ -35,17 +37,17 @@ class RedisManager:
     def _get_token_key(self, token: str) -> str:
         return f"refresh:{token}"
 
-    def _get_user_sessions_key(self, user_id: str) -> str:
-        return f"user_sessions:{user_id}"
+    def _get_user_sessions_key(self, user_sid: str) -> str:
+        return f"user_sessions:{user_sid}"
 
-    async def create_session(self, user_id: str, token: str, ttl_seconds: int) -> bool:
+    async def create_session(self, user_sid: str, token: str, ttl_seconds: int) -> bool:
 
         token_key = self._get_token_key(token)
-        user_sessions_key = self._get_user_sessions_key(user_id)
+        user_sessions_key = self._get_user_sessions_key(user_sid)
 
         session_data = json.dumps(
             {
-                "user_id": user_id,
+                "user_sid": user_sid,
                 # **device_info пока что без
             }
         )
@@ -54,7 +56,6 @@ class RedisManager:
             async with self.client.pipeline(transaction=True) as pipe:
                 await pipe.setex(token_key, ttl_seconds, session_data)
                 await pipe.sadd(user_sessions_key, token)
-                # TTL для множества сессий (чуть больше чем у токена)
                 await pipe.expire(user_sessions_key, ttl_seconds + 60)
                 await pipe.execute()
             return True
@@ -76,7 +77,6 @@ class RedisManager:
     async def revoke_session(self, token: str) -> bool:
         token_key = self._get_token_key(token)
         try:
-            # Сначала получаем user_id, чтобы почистить обратный индекс
             data = await self.client.get(token_key)
             if data:
                 session_data = json.loads(data)
@@ -88,7 +88,6 @@ class RedisManager:
                         await pipe.srem(self._get_user_sessions_key(user_id), token)
                     await pipe.execute()
             else:
-                # Если токена нет, просто пробуем удалить (на случай гонки)
                 await self.client.delete(token_key)
 
             return True
@@ -98,7 +97,6 @@ class RedisManager:
     async def revoke_all_user_sessions(self, user_id: str) -> int:
         user_sessions_key = self._get_user_sessions_key(user_id)
         try:
-            # Получаем все токены пользователя
             tokens = await self.client.smembers(user_sessions_key)
             if not tokens:
                 return 0
