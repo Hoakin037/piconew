@@ -18,10 +18,11 @@ class Users(Base):
     )
     name: Mapped[str] = mapped_column(String(36), nullable=False)
     surname: Mapped[str] = mapped_column(String(36), nullable=False)
+    username: Mapped[str] = mapped_column(String(72), nullable=False, unique=True )
     status: Mapped[str] = mapped_column(String(72), nullable=False)
     avatar: Mapped[str] = mapped_column(String(100), nullable=True)
     email: Mapped[str] = mapped_column(String(144), unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(500), nullable=False)
+    password: Mapped[str] = mapped_column(String(500), nullable=False)
     is_active: Mapped[bool] = mapped_column(default=False)
 
     users_chats: Mapped[list["UsersChats"]] = relationship(
@@ -40,6 +41,8 @@ class Chats(Base):
     )
     chat_name: Mapped[str] = mapped_column(String(72), nullable=False)
     avatar: Mapped[str] = mapped_column(String(100), nullable=True)
+    chat_type: Mapped[str] = mapped_column(String(20), nullable=False)
+
     users_chats: Mapped[list["UsersChats"]] = relationship(
         "UsersChats", back_populates="chats"
     )
@@ -47,7 +50,7 @@ class Chats(Base):
         "Messages", back_populates="chats"
     )
 
-
+#
 class UsersChats(Base):
     __tablename__ = "userschats"
 
@@ -75,7 +78,7 @@ class Messages(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     sender_sid: Mapped[UUID] = mapped_column(ForeignKey("users.sid"), nullable=False)
-    chat_id: Mapped[UUID] = mapped_column(ForeignKey("chats.sid"))
+    chat_sid: Mapped[UUID] = mapped_column(ForeignKey("chats.sid"))
     content: Mapped[str] = mapped_column(String(4000))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -93,7 +96,7 @@ class Messages(Base):
     # Само-связь (ответы)
     replied_to: Mapped[Optional["Messages"]] = relationship(
         "Messages",
-        remote_side=[UUID],
+        remote_side=[sid],
         back_populates="replies",
     )
     replies: Mapped[list["Messages"]] = relationship(

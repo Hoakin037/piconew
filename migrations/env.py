@@ -2,11 +2,10 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
-from os import getenv
 from alembic import context
 
 from app.database import Base
-from app.core.database_settings import get_database_settings
+from app.common.core import get_database_settings
 
 config = context.config
 

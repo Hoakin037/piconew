@@ -1,0 +1,15 @@
+from enum import IntEnum
+
+class CommonCodesEnum(IntEnum):
+    DEFAULT = 0
+    NOT_FOUND = 1
+    ACCESS_DENIED = 2
+    USER_ALREADY_EXISTS = 3
+    INCORRECT_PASSWORD = 4
+    TOKEN_VALIDATION_ERROR = 5
+    TOKEN_MISSING = 6
+    USER_ALREADY_LOGOUT = 7
+    UNKNOWN_ERROR = 8
+    VALIDATION_ERROR = 9
+
+
