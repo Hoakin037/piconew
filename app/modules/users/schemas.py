@@ -1,16 +1,16 @@
 from typing import Literal
-from uuid import uuid4, UUID
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from  app.common.schemas import CoreSchema, ResultResponse
 
-class UserBase(BaseModel):
+
+class UserBase(CoreSchema):
     name: str
     surname: str
     username: str
     email: str
     avatar: str | None = None
 
-    model_config = ConfigDict(from_attributes=True)
 
 
 class UserCreate(UserBase):
@@ -28,5 +28,6 @@ class ChatParticipant(UserBase):
     joined_at: str
     left_at: str
 
-
+class UserResponse(UserBase, ResultResponse):
+    pass
 

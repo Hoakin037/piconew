@@ -1,11 +1,13 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import HTTPException
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import Users, get_session
+from app.common.consts import CommonCodesEnum
+from app.common.errors import BackendException
+from app.common.schemas import ResultBase
 from .user_repo import UsersRepository, get_user_repo
 from .schemas import UserDTO, UserCreate
 
@@ -22,11 +24,13 @@ class UserService:
     async def get_user(
             self, user_sid: UUID = None,
             username: str = None,
-            email: str=None) -> UserDTO:
+            email: str = None,
+            as_model: bool = False,
+    ) -> UserDTO | Users:
         user_get_strategy = {
-            "user_sid": self.user_repo.get_user_by_sid(user_sid, self.session),
-            "username": self.user_repo.get_user_by_username(username, self.session),
-            "email": self.user_repo.get_user_by_email(email, self.session),
+            "user_sid": await self.user_repo.get_user_by_sid(user_sid, self.session),
+            "username": await self.user_repo.get_user_by_username(username, self.session),
+            "email": await self.user_repo.get_user_by_email(email, self.session),
         }
         fields = [
             ("user_sid", user_sid),
@@ -37,13 +41,17 @@ class UserService:
         user = None
         for key, value in fields:
             if value is not None:
-                user = await user_get_strategy.get(key, value)
+                user = user_get_strategy.get(key, value)
 
         if user is None:
-            raise HTTPException(status_code=404, detail="User not found")
+            raise BackendException(
+                status_code=401,
+                result=ResultBase(code=CommonCodesEnum.NOT_FOUND)
+            )
+        if as_model:
+            return user
 
-        return UserDTO(user)
-
+        return UserDTO.model_validate(user)
 
     async def create_user(
             self,
