@@ -17,6 +17,7 @@ from app.common.core.jwt.jwt_config import JWTConfig, get_jwt_config
 
 security = HTTPBearer()
 
+
 class JWTManager:
     def __init__(self, config: JWTConfig):
         self.config = config
@@ -64,13 +65,13 @@ class JWTManager:
         return self.config.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
 
 
-
 def get_jwt_manager(config: Annotated[JWTConfig, Depends(get_jwt_config)]):
     return JWTManager(config)
 
+
 async def get_current_user(
-        jwt_manager: Annotated[JWTManager, Depends(get_jwt_manager)],
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
+    jwt_manager: Annotated[JWTManager, Depends(get_jwt_manager)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
 ) -> UUID:
     if credentials:
         access_token = credentials.credentials

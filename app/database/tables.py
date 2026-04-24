@@ -18,7 +18,7 @@ class Users(Base):
     )
     name: Mapped[str] = mapped_column(String(36), nullable=False)
     surname: Mapped[str] = mapped_column(String(36), nullable=False)
-    username: Mapped[str] = mapped_column(String(72), nullable=False, unique=True )
+    username: Mapped[str] = mapped_column(String(72), nullable=False, unique=True)
     status: Mapped[str] = mapped_column(String(72), nullable=False)
     avatar: Mapped[str] = mapped_column(String(100), nullable=True)
     email: Mapped[str] = mapped_column(String(144), unique=True, nullable=False)
@@ -49,6 +49,7 @@ class Chats(Base):
     chat_messages: Mapped[list["Messages"]] = relationship(
         "Messages", back_populates="chats"
     )
+
 
 #
 class UsersChats(Base):

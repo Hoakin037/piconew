@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from app.common.core import get_database_settings, DatabaseSettings
 from .tables import Base
 
+
 class DatabaseManager:
     def __init__(self, settings: DatabaseSettings):
         self._engine = None

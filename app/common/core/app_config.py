@@ -7,8 +7,12 @@ from app.common.errors import BackendException
 from .router import router
 from .redis import init_redis_client, get_redis_config
 from app.database import db_manager
-from .middleware_settings import backend_exception_handler, global_exception_handler, validation_exception_handler, \
-    ExceptionMiddleware
+from .middleware_settings import (
+    backend_exception_handler,
+    global_exception_handler,
+    validation_exception_handler,
+    ExceptionMiddleware,
+)
 
 
 @asynccontextmanager
@@ -33,13 +37,14 @@ async def lifespan(app: FastAPI):
 
 
 def app_fabric() -> FastAPI:
-    app = FastAPI(lifespan=lifespan,
+    app = FastAPI(
+        lifespan=lifespan,
         exception_handlers={
             BackendException: backend_exception_handler,
             RequestValidationError: validation_exception_handler,
             Exception: global_exception_handler,
-        }
-        )
+        },
+    )
 
     app.add_middleware(
         CORSMiddleware,

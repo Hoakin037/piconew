@@ -9,21 +9,30 @@ from modules.users.schemas import ChatParticipant
 
 class ChatsBase(BaseModel):
     chat_name: str
-    chat_type: Literal['persona', 'group', 'chat']
+    chat_type: Literal["personal", "group", "chat"]
     avatar: str
 
+
 class ChatsInDB(ChatsBase):
-    pass
+    chat_sid: UUID
+
+class UsersChatsInDB(BaseModel):
+    role: Literal["admin", "member"] = "member"
+    is_pinned: bool = False
+    is_muted: bool = False
+    joined_at: str
+    left_at: str
 
 class ChatsCreate(ChatsBase):
     user_sid: UUID
+    receiver_sid: UUID
 
 
 class ChatsResponse(ChatsBase):
     sid: UUID
-    is_pinned: bool = False
-    is_muted: bool = False
+
     created_at: str
 
-    lastMessage: list[MessageResponse] = []
+    lastMessage: MessageResponse = None
     participants: list[ChatParticipant] = []
+    attachments: list[dict] = []

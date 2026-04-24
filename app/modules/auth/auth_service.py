@@ -12,7 +12,13 @@ from app.database import Users, get_session
 from app.common.schemas import ResultResponse, ResultBase
 from app.common.consts import CommonCodesEnum
 from app.common.errors import BackendException
-from .schemas import UserRegister, UserLogin, UserTokens, UserLoginResponse, UserRefreshTokenResponse
+from .schemas import (
+    UserRegister,
+    UserLogin,
+    UserTokens,
+    UserLoginResponse,
+    UserRefreshTokenResponse,
+)
 from app.modules.users import UsersRepository, UserDTO, get_user_repo
 from app.modules.users.schemas import UserCreate
 
@@ -32,14 +38,19 @@ class AuthService:
         self._redis_manager = redis_manager
 
     async def get_user(
-            self, user_sid: UUID = None,
-            username: str = None,
-            email: str = None,
-            as_model: bool = False,
+        self,
+        user_sid: UUID = None,
+        username: str = None,
+        email: str = None,
+        as_model: bool = False,
     ) -> UserDTO | Users:
         user_get_strategy = {
-            "user_sid": await self.user_repo.get_user_by_sid(user_sid, self.session),
-            "username": await self.user_repo.get_user_by_username(username, self.session),
+            "user_sid": await self.user_repo.get_by_sid(
+                sid=user_sid, session=self.session
+            ),
+            "username": await self.user_repo.get_user_by_username(
+                username, self.session
+            ),
             "email": await self.user_repo.get_user_by_email(email, self.session),
         }
         fields = [
@@ -51,12 +62,11 @@ class AuthService:
         user = None
         for key, value in fields:
             if value is not None:
-                user =  user_get_strategy.get(key, value)
+                user = user_get_strategy.get(key, value)
 
         if user is None:
             raise BackendException(
-                status_code=401,
-                result=ResultBase(code=CommonCodesEnum.NOT_FOUND)
+                status_code=401, result=ResultBase(code=CommonCodesEnum.NOT_FOUND)
             )
         if as_model:
             return user
@@ -73,20 +83,20 @@ class AuthService:
         # mock
         await self._redis_manager.create_session(str(user_sid), refresh_token, 3600)
 
-        return UserTokens(
-            access_token=access_token, refresh_token=refresh_token
-        )
+        return UserTokens(access_token=access_token, refresh_token=refresh_token)
 
     async def register_user(self, user: UserRegister) -> UserCreate:
-        username = await self.user_repo.get_user_by_username(username=user.username, session=self.session)
-        email = await self.user_repo.get_user_by_email(email=user.email, session=self.session)
+        username = await self.user_repo.get_user_by_username(
+            username=user.username, session=self.session
+        )
+        email = await self.user_repo.get_user_by_email(
+            email=user.email, session=self.session
+        )
 
         if any([username, email]):
             raise BackendException(
                 status_code=422,
-                result=ResultBase(
-                code=CommonCodesEnum.USER_ALREADY_EXISTS
-                )
+                result=ResultBase(code=CommonCodesEnum.USER_ALREADY_EXISTS),
             )
 
         user.password = self._pwd_context.hash(user.password)
@@ -98,22 +108,21 @@ class AuthService:
         if not self._pwd_context.verify(user.password, current_user.password):
             raise BackendException(
                 status_code=422,
-                result=ResultBase(
-                    code=CommonCodesEnum.INCORRECT_PASSWORD
-                )
+                result=ResultBase(code=CommonCodesEnum.INCORRECT_PASSWORD),
             )
 
         user_tokens = await self.create_tokens(current_user.sid)
-        await self._redis_manager.create_session(str(current_user.sid), user_tokens.refresh_token, 3600)
+        await self._redis_manager.create_session(
+            str(current_user.sid), user_tokens.refresh_token, 3600
+        )
 
         user_info = UserLoginResponse.model_validate(
-
             {
                 **current_user.__dict__,
-            "access_token": user_tokens.access_token,
-            "refresh_token": user_tokens.refresh_token,
-            "result": ResultBase(code=CommonCodesEnum.DEFAULT)
-             }
+                "access_token": user_tokens.access_token,
+                "refresh_token": user_tokens.refresh_token,
+                "result": ResultBase(code=CommonCodesEnum.DEFAULT),
+            }
         )
         return user_info
 
@@ -126,7 +135,7 @@ class AuthService:
         if not session:
             raise BackendException(
                 status_code=404,
-                result=ResultBase(code=CommonCodesEnum.USER_ALREADY_LOGOUT)
+                result=ResultBase(code=CommonCodesEnum.USER_ALREADY_LOGOUT),
             )
 
         await self._redis_manager.revoke_session(refresh_token)
@@ -140,26 +149,23 @@ class AuthService:
         if not user_session:
             raise BackendException(
                 status_code=401,
-                result=ResultBase(
-                    code=CommonCodesEnum.TOKEN_VALIDATION_ERROR
-                )
+                result=ResultBase(code=CommonCodesEnum.TOKEN_VALIDATION_ERROR),
             )
 
         await self._redis_manager.revoke_session(refresh_token)
         tokens = await self.create_tokens(user_id)
 
         return UserRefreshTokenResponse(
-            result=ResultBase(
-                code=CommonCodesEnum.DEFAULT
-            ),
+            result=ResultBase(code=CommonCodesEnum.DEFAULT),
             access_token=tokens.access_token,
             refresh_token=tokens.refresh_token,
         )
 
+
 async def get_auth_service(
-        session: Annotated[ AsyncSession, Depends(get_session)],
-        user_repo: Annotated[ UsersRepository, Depends(get_user_repo)],
-        jwt_manager: Annotated[ JWTManager, Depends(get_jwt_manager)],
-        redis_manager: Annotated[ RedisManager, Depends(get_redis_manager)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+    user_repo: Annotated[UsersRepository, Depends(get_user_repo)],
+    jwt_manager: Annotated[JWTManager, Depends(get_jwt_manager)],
+    redis_manager: Annotated[RedisManager, Depends(get_redis_manager)],
 ) -> AuthService:
     return AuthService(session, user_repo, jwt_manager, redis_manager)

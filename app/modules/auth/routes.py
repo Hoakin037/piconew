@@ -10,9 +10,11 @@ from app.common.consts import CommonCodesEnum
 from .schemas import (
     UserLogin,
     UserRegister,
-    UserRefreshToken, UserLoginResponse, UserRefreshTokenResponse
+    UserRefreshToken,
+    UserLoginResponse,
+    UserRefreshTokenResponse,
 )
-from .auth_service import AuthService,    get_auth_service
+from .auth_service import AuthService, get_auth_service
 
 from app.modules.users import UserDTO, UserService, get_user_service
 
@@ -56,27 +58,22 @@ async def login_user(
 @auth.post(path="/logout", status_code=200, response_model=ResultResponse)
 async def logout_user(
     refresh_token: UserRefreshToken,
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service: AuthService = Depends(get_auth_service),
 ):
 
-    await auth_service.logout_user(
-       refresh_token.refresh_token
-    )
-    return ResultResponse(
-        result=ResultBase(code=CommonCodesEnum.DEFAULT)
-    )
+    await auth_service.logout_user(refresh_token.refresh_token)
+    return ResultResponse(result=ResultBase(code=CommonCodesEnum.DEFAULT))
 
 
-
-@auth.post(path="/refresh_tokens", status_code=200, response_model=UserRefreshTokenResponse)
+@auth.post(
+    path="/refresh_tokens", status_code=200, response_model=UserRefreshTokenResponse
+)
 async def refresh_tokens(
     refresh_token: UserRefreshToken,
     auth_service: AuthService = Depends(get_auth_service),
 ):
 
-    user_new_tokens = await auth_service.refresh_tokens(
-        refresh_token.refresh_token
-    )
+    user_new_tokens = await auth_service.refresh_tokens(refresh_token.refresh_token)
     # response.set_cookie(
     #     key="refresh_token",
     #     value=user_new_tokens.refresh_token,
@@ -88,6 +85,3 @@ async def refresh_tokens(
     return user_new_tokens
 
     raise HTTPException(status_code=401, detail="refresh токен не передан.")
-
-
-

@@ -1,5 +1,6 @@
 from enum import IntEnum
 
+
 class CommonCodesEnum(IntEnum):
     DEFAULT = 0
     NOT_FOUND = 1
@@ -11,5 +12,3 @@ class CommonCodesEnum(IntEnum):
     USER_ALREADY_LOGOUT = 7
     UNKNOWN_ERROR = 8
     VALIDATION_ERROR = 9
-
-

@@ -12,9 +12,9 @@ class MessageBase(BaseModel):
     reply_to: None
     user: UserResponse
 
+
 class MessageResponse(MessageBase):
     sid: UUID
     created_at: str
     updated_at: str
     is_deleted: bool = False
-
