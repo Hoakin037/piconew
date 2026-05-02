@@ -1,0 +1,88 @@
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Query
+
+from app.common.consts import CommonCodesEnum
+from app.common.core.jwt import get_current_user
+from app.common.schemas import ResultBase
+
+from .chats_service import ChatsService, get_chats_service
+from .schemas import (
+    BaseResponse,
+    CreateChatRequest,
+    CreateGroupRequest,
+    GetChatResponse,
+    GetChatsResponse,
+    UpdateChatRequest,
+)
+
+chats = APIRouter(prefix="/chats", tags=["Chats"])
+
+
+@chats.post("/create_chat", status_code=201, response_model=GetChatResponse)
+async def create_chat(
+    request: CreateChatRequest,
+    current_user: UUID = Depends(get_current_user),
+    chats_service: ChatsService = Depends(get_chats_service),
+):
+    return await chats_service.create_personal_chat(current_user, request.receiver_id)
+
+
+@chats.post("/create_group", status_code=201, response_model=GetChatResponse)
+async def create_group(
+    request: CreateGroupRequest,
+    current_user: UUID = Depends(get_current_user),
+    chats_service: ChatsService = Depends(get_chats_service),
+):
+    return await chats_service.create_group_chat(current_user, request.chat_name)
+
+
+@chats.get("/", response_model=GetChatsResponse)
+async def get_user_chats(
+    current_user: UUID = Depends(get_current_user),
+    chats_service: ChatsService = Depends(get_chats_service),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    return await chats_service.get_user_chats(
+        user_sid=current_user,
+        skip=offset,
+        limit=limit,
+    )
+
+
+@chats.get("/{chat_sid}", response_model=GetChatResponse)
+async def get_chat_by_id(
+    chat_sid: UUID,
+    current_user: UUID = Depends(get_current_user),
+    chats_service: ChatsService = Depends(get_chats_service),
+):
+    return await chats_service.get_chat_by_id(current_user, chat_sid)
+
+
+@chats.put("/{chat_sid}", response_model=BaseResponse)
+async def update_chat(
+    chat_sid: UUID,
+    request: UpdateChatRequest,
+    current_user: UUID = Depends(get_current_user),
+    chats_service: ChatsService = Depends(get_chats_service),
+):
+    await chats_service.update_chat_settings(
+        chat_sid=chat_sid,
+        current_user_sid=current_user,
+        chat_name=request.chat_name,
+        avatar=request.avatar,
+        is_pinned=request.is_pinned,
+        is_muted=request.is_muted,
+    )
+    return BaseResponse(result=ResultBase(code=CommonCodesEnum.DEFAULT))
+
+
+@chats.delete("/{chat_sid}", response_model=BaseResponse)
+async def delete_chat(
+    chat_sid: UUID,
+    current_user: UUID = Depends(get_current_user),
+    chats_service: ChatsService = Depends(get_chats_service),
+):
+    await chats_service.delete_chat(chat_sid, current_user)
+    return BaseResponse(result=ResultBase(code=CommonCodesEnum.DEFAULT))

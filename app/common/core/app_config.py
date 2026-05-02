@@ -1,18 +1,20 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 
 from app.common.errors import BackendException
-from .router import router
-from .redis import init_redis_client, get_redis_config
 from app.database import db_manager
+
 from .middleware_settings import (
+    ExceptionMiddleware,
     backend_exception_handler,
     global_exception_handler,
     validation_exception_handler,
-    ExceptionMiddleware,
 )
+from .redis import get_redis_config, init_redis_client
+from .router import router
 
 
 @asynccontextmanager

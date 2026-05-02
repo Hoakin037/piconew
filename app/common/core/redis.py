@@ -1,13 +1,11 @@
-from uuid import UUID
+import json
+from functools import lru_cache
+from pathlib import Path
 
+from fastapi import Request
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from redis import RedisError
 from redis.asyncio import Redis
-from fastapi import Request
-import json
-from pathlib import Path
-from typing import Dict, Any
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from functools import lru_cache
 
 
 class RedisConfig(BaseSettings):
@@ -41,7 +39,6 @@ class RedisManager:
         return f"user_sessions:{user_sid}"
 
     async def create_session(self, user_sid: str, token: str, ttl_seconds: int) -> bool:
-
         token_key = self._get_token_key(token)
         user_sessions_key = self._get_user_sessions_key(user_sid)
 

@@ -1,26 +1,25 @@
 from typing import Annotated
-from uuid import UUID, uuid4
+from uuid import UUID
 
-from fastapi import HTTPException
 from fastapi.params import Depends
 from pwdlib import PasswordHash
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.core import JWTManager, RedisManager, get_jwt_manager, get_redis_manager
-from app.database import Users, get_session
-from app.common.schemas import ResultResponse, ResultBase
 from app.common.consts import CommonCodesEnum
+from app.common.core import JWTManager, RedisManager, get_jwt_manager, get_redis_manager
 from app.common.errors import BackendException
+from app.common.schemas import ResultBase
+from app.database import Users, get_session
+from app.modules.users import UserDTO, UsersRepository, get_user_repo
+from app.modules.users.schemas import UserCreate
+
 from .schemas import (
-    UserRegister,
     UserLogin,
-    UserTokens,
     UserLoginResponse,
     UserRefreshTokenResponse,
+    UserRegister,
+    UserTokens,
 )
-from app.modules.users import UsersRepository, UserDTO, get_user_repo
-from app.modules.users.schemas import UserCreate
 
 
 class AuthService:
@@ -127,7 +126,6 @@ class AuthService:
         return user_info
 
     async def logout_user(self, refresh_token: str) -> None:
-
         current_user_sid = await self._jwt_manager.decode_token(refresh_token)
         await self.get_user(user_sid=current_user_sid)
 

@@ -12,3 +12,4 @@ class CommonCodesEnum(IntEnum):
     USER_ALREADY_LOGOUT = 7
     UNKNOWN_ERROR = 8
     VALIDATION_ERROR = 9
+    CHAT_ALREADY_EXISTS = 10

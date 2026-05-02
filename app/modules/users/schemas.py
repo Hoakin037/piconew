@@ -9,7 +9,9 @@ class UserBase(CoreSchema):
     surname: str
     username: str
     email: str
-    avatar: str | None = None
+    avatar: str | None = (
+        "https://sobakovod.club/uploads/posts/2021-12/1640661699_6-sobakovod-club-p-sobaki-sobaka-mem-8.jpg"
+    )
 
 
 class UserCreate(UserBase):
@@ -32,3 +34,10 @@ class ChatParticipant(UserBase):
 
 class UserResponse(UserBase, ResultResponse):
     pass
+
+
+class UserLastMessage(CoreSchema):
+    sid: UUID
+    name: str
+    surname: str
+    username: str

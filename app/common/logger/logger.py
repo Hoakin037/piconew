@@ -1,4 +1,5 @@
 import logging
+
 from colorama import Fore, Style
 
 from app.common.consts.logger import LoggerFormatEnum

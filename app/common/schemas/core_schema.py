@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, field_validator, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class CoreSchema(BaseModel):

@@ -4,12 +4,13 @@ from uuid import UUID
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import Users, get_session
 from app.common.consts import CommonCodesEnum
 from app.common.errors import BackendException
 from app.common.schemas import ResultBase
+from app.database import Users, get_session
+
+from .schemas import UserCreate, UserDTO
 from .user_repo import UsersRepository, get_user_repo
-from .schemas import UserDTO, UserCreate
 
 
 class UserService:
@@ -24,23 +25,16 @@ class UserService:
         email: str = None,
         as_model: bool = False,
     ) -> UserDTO | Users:
-        user_get_strategy = {
-            "user_sid": await self.user_repo.get_by_sid(user_sid, self.session),
-            "username": await self.user_repo.get_user_by_username(
-                username, self.session
-            ),
-            "email": await self.user_repo.get_user_by_email(email, self.session),
-        }
-        fields = [
-            ("user_sid", user_sid),
-            ("username", username),
-            ("email", email),
-        ]
-
         user = None
-        for key, value in fields:
-            if value is not None:
-                user = user_get_strategy.get(key, value)
+
+        if user_sid is not None:
+            user = await self.user_repo.get_by_sid(
+                self.session, user_sid
+            )  # Исправлено: session сначала
+        elif username is not None:
+            user = await self.user_repo.get_user_by_username(username, self.session)
+        elif email is not None:
+            user = await self.user_repo.get_user_by_email(email, self.session)
 
         if user is None:
             raise BackendException(
@@ -52,7 +46,6 @@ class UserService:
         return UserDTO.model_validate(user)
 
     async def create_user(self, user: UserCreate) -> UserDTO:
-
         user_to_create = Users(**user.model_dump())
         await self.user_repo.create(obj=user_to_create, session=self.session)
         await self.session.commit()

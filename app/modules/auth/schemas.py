@@ -1,7 +1,8 @@
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr
-from app.common.schemas import ResultResponse, CoreSchema
+from pydantic import EmailStr
+
+from app.common.schemas import CoreSchema, ResultResponse
 
 
 class UserLogin(CoreSchema):

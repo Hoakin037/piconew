@@ -1,8 +1,8 @@
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from contextlib import asynccontextmanager
 
-from app.common.core import get_database_settings, DatabaseSettings
-from .tables import Base
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from app.common.core import DatabaseSettings, get_database_settings
 
 
 class DatabaseManager:
@@ -37,7 +37,7 @@ class DatabaseManager:
             try:
                 yield session
 
-            except Exception as e:
+            except Exception:
                 await session.rollback()
                 raise
             finally:

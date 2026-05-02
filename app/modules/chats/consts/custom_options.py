@@ -1,7 +1,6 @@
+from database.tables import Chats
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.base import ExecutableOption
-
-from database.tables import Chats, Messages
 
 
 class ChatsCustomOptions(ExecutableOption):

@@ -1,22 +1,17 @@
-from uuid import UUID
-
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.common.core.jwt import get_current_user
-from app.common.schemas import ResultResponse, ResultBase
-from app.modules.users.schemas import UserResponse
 from app.common.consts import CommonCodesEnum
+from app.common.schemas import ResultBase, ResultResponse
+from app.modules.users import UserService, get_user_service
 
+from .auth_service import AuthService, get_auth_service
 from .schemas import (
     UserLogin,
-    UserRegister,
-    UserRefreshToken,
     UserLoginResponse,
+    UserRefreshToken,
     UserRefreshTokenResponse,
+    UserRegister,
 )
-from .auth_service import AuthService, get_auth_service
-
-from app.modules.users import UserDTO, UserService, get_user_service
 
 auth = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -60,7 +55,6 @@ async def logout_user(
     refresh_token: UserRefreshToken,
     auth_service: AuthService = Depends(get_auth_service),
 ):
-
     await auth_service.logout_user(refresh_token.refresh_token)
     return ResultResponse(result=ResultBase(code=CommonCodesEnum.DEFAULT))
 
@@ -72,7 +66,6 @@ async def refresh_tokens(
     refresh_token: UserRefreshToken,
     auth_service: AuthService = Depends(get_auth_service),
 ):
-
     user_new_tokens = await auth_service.refresh_tokens(refresh_token.refresh_token)
     # response.set_cookie(
     #     key="refresh_token",

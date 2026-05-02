@@ -1,8 +1,8 @@
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
-from modules.users.schemas import UserResponse
+from app.modules.users.schemas import UserLastMessage, UserResponse
 
 
 class MessageBase(BaseModel):
@@ -13,7 +13,12 @@ class MessageBase(BaseModel):
     user: UserResponse
 
 
-class MessageResponse(MessageBase):
+class MessageResponse(BaseModel):
+    chat_sid: UUID
+    content: str
+    attachments: list = []
+    reply_to: None
+    user: UserLastMessage
     sid: UUID
     created_at: str
     updated_at: str
