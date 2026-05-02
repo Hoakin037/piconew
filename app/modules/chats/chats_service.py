@@ -12,8 +12,8 @@ from app.modules.users.user_service import UserService, get_user_service
 
 from .chats_repo import ChatsRepository
 from .schemas import (
-    ChatInfo,
     ChatParticipantUser,
+    FullChatInfo,
     GetChatResponse,
     GetChatsResponse,
     Pagination,
@@ -77,10 +77,7 @@ class ChatsService:
 
         await self.session.commit()
 
-        return GetChatResponse(
-            result=ResultBase(code=CommonCodesEnum.DEFAULT),
-            chat=await self.get_chat_by_id(current_user_sid, new_chat.sid),
-        )
+        return await self.get_chat_by_id(current_user_sid, new_chat.sid)
 
     async def create_group_chat(
         self, current_user_sid: UUID, chat_name: str
@@ -108,34 +105,16 @@ class ChatsService:
         )
 
     async def _map_chat_to_info(
-        self, chat: Chats, current_user_sid: UUID, simplified: bool = False
-    ) -> ChatInfo:
+        self, chat: Chats, simplified: bool = False
+    ) -> FullChatInfo:
         """Маппинг чата в ChatInfo DTO"""
         participants = []
         unread_count = 0
 
         for uc in chat.users_chats:
-            u = uc.users
-            participants.append(
-                ChatParticipantUser(
-                    sid=u.sid,
-                    name=u.name,
-                    surname=u.surname,
-                    email=u.email,
-                    username=u.username,
-                    avatar=u.avatar,
-                    status=u.status,
-                    is_active=u.is_active,
-                    created_at=u.created_at.isoformat()
-                    if hasattr(u, "created_at")
-                    else "",
-                    role=uc.role,
-                    joined_at=uc.joined_at.isoformat() if uc.joined_at else "",
-                    left_at=uc.left_at.isoformat() if uc.left_at else None,
-                )
-            )
+            participants.append(ChatParticipantUser.model_validate(uc))
 
-        return ChatInfo(
+        return FullChatInfo(
             sid=chat.sid,
             type=chat.chat_type,
             chatName=chat.chat_name,
@@ -147,7 +126,7 @@ class ChatsService:
             attachments=[],
         )
 
-    async def get_chat_by_id(self, user_sid: UUID, chat_sid: UUID) -> ChatInfo:
+    async def get_chat_by_id(self, user_sid: UUID, chat_sid: UUID) -> GetChatResponse:
         """Получение полной информации о чате по ID"""
         chat = await self.chats_repo.get_chat_with_details(self.session, chat_sid)
 
@@ -166,7 +145,10 @@ class ChatsService:
                 result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED),
             )
 
-        return await self._map_chat_to_info(chat, user_sid, simplified=False)
+        return GetChatResponse(
+            result=ResultBase(code=CommonCodesEnum.DEFAULT),
+            chat=await self._map_chat_to_info(chat, simplified=False),
+        )
 
     async def get_user_chats(
         self, user_sid: UUID, skip: int = 0, limit: int = 50
@@ -178,8 +160,7 @@ class ChatsService:
         )
 
         chat_infos = [
-            await self._map_chat_to_info(chat, user_sid, simplified=True)
-            for chat in chats
+            await self._map_chat_to_info(chat, simplified=True) for chat in chats
         ]
 
         return GetChatsResponse(
@@ -202,47 +183,31 @@ class ChatsService:
 
         chat = await self.chats_repo.get_by_sid(self.session, chat_sid)
         if chat:
+            # Сначала очищаем все связи пользователей с этим чатом,
+            # чтобы избежать ошибки внешнего ключа (foreign key constraint)
+            await self.chats_repo.remove_all_users_from_chat(self.session, chat_sid)
+            # Затем удаляем сам чат
             await self.chats_repo.delete(self.session, chat)
             await self.session.commit()
 
-    async def update_chat_settings(
-        self,
-        chat_sid: UUID,
-        current_user_sid: UUID,
-        chat_name: str = None,
-        avatar: str = None,
-        is_pinned: bool = None,
-        is_muted: bool = None,
-    ) -> None:
-        user_chat = await self.chats_repo.get_user_chat(
-            self.session, chat_sid, current_user_sid
-        )
-
-        if not user_chat:
-            raise BackendException(
-                status_code=403,
-                result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED),
-            )
-
-        chat = await self.chats_repo.get_by_sid(self.session, chat_sid)
-        if chat:
-            if chat_name is not None and user_chat.role == "admin":
-                chat.chat_name = chat_name
-            if avatar is not None and user_chat.role == "admin":
-                chat.avatar = avatar
-
-        if is_pinned is not None:
-            user_chat.is_pinned = is_pinned
-        if is_muted is not None:
-            user_chat.is_muted = is_muted
-
-        await self.session.commit()
-
     async def leave_or_clear_chat(self, chat_sid: UUID, current_user_sid: UUID) -> None:
-        """Метод для удаления связи пользователя с чатом (выход из группы / очистка)"""
+        """Метод для удаления связи пользователя с чатом (выход из группы / очистка у себя)"""
+        # Удаляем связь в UsersChats для текущего пользователя
         await self.chats_repo.remove_user_from_chat(
             self.session, chat_sid, current_user_sid
         )
+
+        # Проверяем количество оставшихся участников
+        participants_count = await self.chats_repo.count_chat_participants(
+            self.session, chat_sid
+        )
+
+        # Если в чате никого не осталось, удаляем его полностью
+        if participants_count == 0:
+            chat = await self.chats_repo.get_by_sid(self.session, chat_sid)
+            if chat:
+                await self.chats_repo.delete(self.session, chat)
+
         await self.session.commit()
 
 

@@ -120,3 +120,25 @@ class ChatsRepository(BaseRepository[Chats]):
         )
         result = await session.execute(query)
         return result.scalars().first()
+
+    async def remove_all_users_from_chat(
+        self, session: AsyncSession, chat_sid: UUID
+    ) -> None:
+        """Физическое удаление всех сущностей UsersChats для чата (перед удалением самого чата)"""
+        query = select(UsersChats).where(UsersChats.chat_sid == chat_sid)
+        result = await session.execute(query)
+        users_chats = result.scalars().all()
+        for uc in users_chats:
+            await session.delete(uc)
+        await session.flush()
+
+    async def count_chat_participants(
+        self, session: AsyncSession, chat_sid: UUID
+    ) -> int:
+        """Подсчет количества оставшихся участников в чате"""
+        query = (
+            select(func.count())
+            .select_from(UsersChats)
+            .where(UsersChats.chat_sid == chat_sid)
+        )
+        return await session.scalar(query) or 0

@@ -1,11 +1,10 @@
 from uuid import UUID
 
-from pydantic import BaseModel
-
+from app.common.schemas import CoreSchema
 from app.modules.users.schemas import UserLastMessage, UserResponse
 
 
-class MessageBase(BaseModel):
+class MessageBase(CoreSchema):
     chat_sid: UUID
     content: str
     attachments: list = []
@@ -13,7 +12,7 @@ class MessageBase(BaseModel):
     user: UserResponse
 
 
-class MessageResponse(BaseModel):
+class MessageResponse(CoreSchema):
     chat_sid: UUID
     content: str
     attachments: list = []

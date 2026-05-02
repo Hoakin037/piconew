@@ -86,3 +86,17 @@ async def delete_chat(
 ):
     await chats_service.delete_chat(chat_sid, current_user)
     return BaseResponse(result=ResultBase(code=CommonCodesEnum.DEFAULT))
+
+
+@chats.delete("/{chat_sid}/leave", response_model=BaseResponse)
+async def leave_chat(
+    chat_sid: UUID,
+    current_user: UUID = Depends(get_current_user),
+    chats_service: ChatsService = Depends(get_chats_service),
+):
+    """
+    Удаление чата/группы у себя (выход из чата).
+    Если пользователь был последним участником, чат полностью удаляется.
+    """
+    await chats_service.leave_or_clear_chat(chat_sid, current_user)
+    return BaseResponse(result=ResultBase(code=CommonCodesEnum.DEFAULT))
