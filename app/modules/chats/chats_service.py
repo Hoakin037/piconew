@@ -2,14 +2,12 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi.params import Depends
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.common.consts import CommonCodesEnum
 from app.common.errors import BackendException
 from app.common.schemas import ResultBase
-from app.database import Chats, UsersChats, get_session
+from app.database import Chats, get_session
 from app.modules.users.user_service import UserService, get_user_service
 
 from .chats_repo import ChatsRepository
@@ -37,7 +35,6 @@ class ChatsService:
         self, current_user_sid: UUID, receiver_sid: UUID
     ) -> GetChatResponse:
         """Создание личного чата"""
-        # Проверяем, что получатель существует
         receiver = await self.user_service.get_user(
             user_sid=receiver_sid, as_model=True
         )
@@ -47,9 +44,8 @@ class ChatsService:
                 result=ResultBase(code=CommonCodesEnum.NOT_FOUND),
             )
 
-        # Проверяем, не существует ли уже личный чат между этими пользователями
-        existing_chat = await self._find_existing_personal_chat(
-            current_user_sid, receiver_sid
+        existing_chat = await self.chats_repo.find_personal_chat_between_users(
+            self.session, current_user_sid, receiver_sid
         )
         if existing_chat:
             raise BackendException(
@@ -57,13 +53,11 @@ class ChatsService:
                 status_code=409,
             )
 
-        # Создаем название чата из имен пользователей
         current_user = await self.user_service.get_user(
             user_sid=current_user_sid, as_model=True
         )
         chat_name = f"{current_user.name} {current_user.surname} & {receiver.name} {receiver.surname}"
 
-        # Создаем новый чат
         new_chat = await self.chats_repo.create(
             session=self.session,
             obj=Chats(
@@ -74,7 +68,6 @@ class ChatsService:
         )
         await self.session.flush()
 
-        # Добавляем участников
         await self.chats_repo.add_participant(
             self.session, current_user_sid, new_chat.sid, "admin"
         )
@@ -84,7 +77,6 @@ class ChatsService:
 
         await self.session.commit()
 
-        # Возвращаем созданный чат
         return GetChatResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
             chat=await self.get_chat_by_id(current_user_sid, new_chat.sid),
@@ -94,7 +86,6 @@ class ChatsService:
         self, current_user_sid: UUID, chat_name: str
     ) -> GetChatResponse:
         """Создание группового чата"""
-        # Создаем новый групповой чат
         new_chat = await self.chats_repo.create(
             session=self.session,
             obj=Chats(
@@ -105,7 +96,6 @@ class ChatsService:
         )
         await self.session.flush()
 
-        # Добавляем создателя как админа
         await self.chats_repo.add_participant(
             self.session, current_user_sid, new_chat.sid, "admin"
         )
@@ -117,27 +107,6 @@ class ChatsService:
             chat=await self.get_chat_by_id(current_user_sid, new_chat.sid),
         )
 
-    async def _find_existing_personal_chat(
-        self, user_sid_1: UUID, user_sid_2: UUID
-    ) -> Chats | None:
-        """Поиск существующего личного чата между двумя пользователями"""
-        # Находим чаты, где оба пользователя являются участниками и тип чата 'personal'
-        subquery = (
-            select(UsersChats.chat_sid)
-            .where(UsersChats.user_sid.in_([user_sid_1, user_sid_2]))
-            .group_by(UsersChats.chat_sid)
-            .having(func.count(UsersChats.user_sid) == 2)
-        )
-
-        query = (
-            select(Chats)
-            .where(Chats.sid.in_(subquery))
-            .where(Chats.chat_type == "personal")
-        )
-
-        result = await self.session.execute(query)
-        return result.scalars().first()
-
     async def _map_chat_to_info(
         self, chat: Chats, current_user_sid: UUID, simplified: bool = False
     ) -> ChatInfo:
@@ -147,7 +116,6 @@ class ChatsService:
 
         for uc in chat.users_chats:
             u = uc.users
-
             participants.append(
                 ChatParticipantUser(
                     sid=u.sid,
@@ -181,21 +149,13 @@ class ChatsService:
 
     async def get_chat_by_id(self, user_sid: UUID, chat_sid: UUID) -> ChatInfo:
         """Получение полной информации о чате по ID"""
-        query = (
-            select(Chats)
-            .where(Chats.sid == chat_sid)
-            .options(
-                selectinload(Chats.users_chats).selectinload(UsersChats.users),
-                selectinload(Chats.chat_messages),
-            )
-        )
-        result = await self.session.execute(query)
-        chat = result.scalars().first()
+        chat = await self.chats_repo.get_chat_with_details(self.session, chat_sid)
 
         if not chat:
             raise BackendException(
                 status_code=404, result=ResultBase(code=CommonCodesEnum.NOT_FOUND)
             )
+
         is_participant = any(
             str(uc.user_sid) == str(user_sid) and uc.left_at is None
             for uc in chat.users_chats
@@ -212,26 +172,15 @@ class ChatsService:
         self, user_sid: UUID, skip: int = 0, limit: int = 50
     ) -> GetChatsResponse:
         """Получение всех чатов пользователя с пагинацией (упрощенный вид)"""
-        chats, total = await self.chats_repo.get_filtered(
+        # Используем новый метод репозитория для загрузки чатов и их зависимостей (избегаем N+1)
+        chats, total = await self.chats_repo.get_filtered_with_details(
             self.session, user_sid, skip, limit
         )
 
-        # Загружаем участников и сообщения для каждого чата
-        for chat in chats:
-            await self.session.execute(
-                select(Chats)
-                .where(Chats.sid == chat.sid)
-                .options(
-                    selectinload(Chats.users_chats).selectinload(UsersChats.users),
-                    selectinload(Chats.chat_messages),
-                )
-            )
-
-        chat_infos = []
-        for chat in chats:
-            chat_infos.append(
-                await self._map_chat_to_info(chat, user_sid, simplified=True)
-            )
+        chat_infos = [
+            await self._map_chat_to_info(chat, user_sid, simplified=True)
+            for chat in chats
+        ]
 
         return GetChatsResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
@@ -241,14 +190,9 @@ class ChatsService:
 
     async def delete_chat(self, chat_sid: UUID, current_user_sid: UUID) -> None:
         """Удаление группы (только админ может удалить)"""
-        # Проверяем, является ли пользователь админом чата
-        query = select(UsersChats).where(
-            UsersChats.chat_sid == chat_sid,
-            UsersChats.user_sid == current_user_sid,
-            UsersChats.left_at.is_(None),
+        user_chat = await self.chats_repo.get_user_chat(
+            self.session, chat_sid, current_user_sid
         )
-        result = await self.session.execute(query)
-        user_chat = result.scalars().first()
 
         if not user_chat or user_chat.role != "admin":
             raise BackendException(
@@ -270,13 +214,9 @@ class ChatsService:
         is_pinned: bool = None,
         is_muted: bool = None,
     ) -> None:
-        query = select(UsersChats).where(
-            UsersChats.chat_sid == chat_sid,
-            UsersChats.user_sid == current_user_sid,
-            UsersChats.left_at.is_(None),
+        user_chat = await self.chats_repo.get_user_chat(
+            self.session, chat_sid, current_user_sid
         )
-        result = await self.session.execute(query)
-        user_chat = result.scalars().first()
 
         if not user_chat:
             raise BackendException(
@@ -284,7 +224,6 @@ class ChatsService:
                 result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED),
             )
 
-        # Обновляем настройки чата (только админ может менять имя и аватар)
         chat = await self.chats_repo.get_by_sid(self.session, chat_sid)
         if chat:
             if chat_name is not None and user_chat.role == "admin":
@@ -292,12 +231,18 @@ class ChatsService:
             if avatar is not None and user_chat.role == "admin":
                 chat.avatar = avatar
 
-        # Обновляем личные настройки пользователя
         if is_pinned is not None:
             user_chat.is_pinned = is_pinned
         if is_muted is not None:
             user_chat.is_muted = is_muted
 
+        await self.session.commit()
+
+    async def leave_or_clear_chat(self, chat_sid: UUID, current_user_sid: UUID) -> None:
+        """Метод для удаления связи пользователя с чатом (выход из группы / очистка)"""
+        await self.chats_repo.remove_user_from_chat(
+            self.session, chat_sid, current_user_sid
+        )
         await self.session.commit()
 
 

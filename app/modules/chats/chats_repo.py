@@ -1,8 +1,9 @@
 from collections.abc import Sequence
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import Chats, UsersChats
 from app.database.base_repo import BaseRepository
@@ -26,6 +27,27 @@ class ChatsRepository(BaseRepository[Chats]):
         await session.flush()
         return user_chat
 
+    async def get_user_chat(
+        self, session: AsyncSession, chat_sid: UUID, user_sid: UUID
+    ) -> UsersChats | None:
+        """Получение конкретной записи участия пользователя в чате"""
+        query = select(UsersChats).where(
+            UsersChats.chat_sid == chat_sid,
+            UsersChats.user_sid == user_sid,
+            UsersChats.left_at.is_(None),
+        )
+        result = await session.execute(query)
+        return result.scalars().first()
+
+    async def remove_user_from_chat(
+        self, session: AsyncSession, chat_sid: UUID, user_sid: UUID
+    ) -> None:
+        """Физическое удаление сущности UsersChats (выход из группы / очистка)"""
+        user_chat = await self.get_user_chat(session, chat_sid, user_sid)
+        if user_chat:
+            await session.delete(user_chat)
+            await session.flush()
+
     async def get_filtered(
         self,
         session: AsyncSession,
@@ -40,3 +62,61 @@ class ChatsRepository(BaseRepository[Chats]):
         query = select(Chats).where(Chats.sid.in_(subquery))
 
         return await self._apply_pagination(query, session, skip, limit)
+
+    async def get_filtered_with_details(
+        self,
+        session: AsyncSession,
+        user_sid: UUID,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[Sequence[Chats], int]:
+        """Получение списка чатов пользователя с жадной загрузкой отношений"""
+        subquery = select(UsersChats.chat_sid).where(
+            UsersChats.user_sid == user_sid, UsersChats.left_at.is_(None)
+        )
+
+        query = (
+            select(Chats)
+            .where(Chats.sid.in_(subquery))
+            .options(
+                selectinload(Chats.users_chats).selectinload(UsersChats.users),
+                selectinload(Chats.chat_messages),
+            )
+        )
+
+        return await self._apply_pagination(query, session, skip, limit)
+
+    async def find_personal_chat_between_users(
+        self, session: AsyncSession, user_sid_1: UUID, user_sid_2: UUID
+    ) -> Chats | None:
+        """Поиск существующего личного чата между двумя пользователями"""
+        subquery = (
+            select(UsersChats.chat_sid)
+            .where(UsersChats.user_sid.in_([user_sid_1, user_sid_2]))
+            .group_by(UsersChats.chat_sid)
+            .having(func.count(UsersChats.user_sid) == 2)
+        )
+
+        query = (
+            select(Chats)
+            .where(Chats.sid.in_(subquery))
+            .where(Chats.chat_type == "personal")
+        )
+
+        result = await session.execute(query)
+        return result.scalars().first()
+
+    async def get_chat_with_details(
+        self, session: AsyncSession, chat_sid: UUID
+    ) -> Chats | None:
+        """Получение полной информации о чате по ID (с подгрузкой сообщений и юзеров)"""
+        query = (
+            select(Chats)
+            .where(Chats.sid == chat_sid)
+            .options(
+                selectinload(Chats.users_chats).selectinload(UsersChats.users),
+                selectinload(Chats.chat_messages),
+            )
+        )
+        result = await session.execute(query)
+        return result.scalars().first()
