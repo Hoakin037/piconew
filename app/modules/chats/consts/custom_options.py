@@ -1,13 +1,25 @@
-from database.tables import Chats
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.base import ExecutableOption
 
+from app.database.tables import Chats, UsersChats
 
-class ChatsCustomOptions(ExecutableOption):
+
+class ChatsCustomOptions:
     @staticmethod
-    async def with_users_chats() -> tuple[ExecutableOption, ...]:
+    def with_users_chats() -> tuple[ExecutableOption, ...]:
         return (selectinload(Chats.users_chats),)
 
     @staticmethod
-    async def with_messages() -> tuple[ExecutableOption, ...]:
+    def with_users_chats_and_users() -> tuple[ExecutableOption, ...]:
+        return (selectinload(Chats.users_chats).selectinload(UsersChats.users),)
+
+    @staticmethod
+    def with_messages() -> tuple[ExecutableOption, ...]:
         return (selectinload(Chats.chat_messages),)
+
+    @staticmethod
+    def with_all() -> tuple[ExecutableOption, ...]:
+        return (
+            selectinload(Chats.users_chats).selectinload(UsersChats.users),
+            selectinload(Chats.chat_messages),
+        )

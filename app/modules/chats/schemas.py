@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import model_validator
 
-from app.common.schemas import CoreSchema, ResultBase
+from app.common.schemas import CoreSchema, Pagination, ResultBase
 from app.modules.messages.schemas import MessageResponse
 from app.modules.users.schemas import UserLastMessage
 
@@ -24,18 +24,16 @@ class BaseResponse(CoreSchema):
 
 
 class CreateChatRequest(CoreSchema):
-    type: Literal["chat"]
     receiver_id: UUID
 
 
 class CreateGroupRequest(CoreSchema):
-    type: Literal["group"]
     chat_name: str
 
 
 class UpdateChatRequest(CoreSchema):
     chat_name: str = None
-    avatar: str = choice(avatars)
+    avatar: str | None = choice(avatars)
     is_pinned: bool = False
     is_muted: bool = False
 
@@ -47,7 +45,7 @@ class ChatParticipantUser(CoreSchema):
     email: str
     username: str = None
     avatar: str = choice(avatars)
-    status: str = None
+    status: str | None = None
     is_active: bool
     created_at: datetime
     role: Literal["admin", "member"]
@@ -57,10 +55,8 @@ class ChatParticipantUser(CoreSchema):
     @model_validator(mode="before")
     @classmethod
     def map_user_fields(cls, data: Any):
-        # Если пришел объект UsersChats (у которого есть атрибут 'users')
         if hasattr(data, "users") and data.users:
             user = data.users
-            # Создаем словарь, объединяя данные связи и данные пользователя
             result = {
                 **user.__dict__,
                 "role": data.role,
@@ -76,11 +72,11 @@ class ChatParticipant(CoreSchema):
     user: ChatParticipantUser
 
 
-class FullChatInfo(CoreSchema):
+class ShortChatInfo(CoreSchema):
     sid: UUID
-    type: Literal["personal", "group", "chat"]
+    type: Literal["personal", "group"]
     chatName: str
-    avatar: str = choice(avatars)
+    avatar: str | None = choice(avatars)
     last_message: MessageResponse = MessageResponse(
         chat_sid=UUID("b870ee88-cdc6-49ea-920a-996e16992d9d"),
         content="Breaking Bad",
@@ -98,43 +94,14 @@ class FullChatInfo(CoreSchema):
         is_deleted=False,
     )
     unread_count: int = 0
-    participants: list[ChatParticipantUser]
     is_pinned: bool
     is_muted: bool
     created_at: str
+
+
+class FullChatInfo(ShortChatInfo):
+    participants: list[ChatParticipantUser]
     attachments: list = []
-
-
-class ShortChatInfo(CoreSchema):
-    sid: UUID
-    type: Literal["personal", "group", "chat"]
-    chatName: str
-    avatar: str = choice(avatars)
-    last_message: MessageResponse = MessageResponse(
-        chat_sid=UUID("b870ee88-cdc6-49ea-920a-996e16992d9d"),
-        content="Breaking Bad",
-        attachments=[],
-        reply_to=None,
-        user=UserLastMessage(
-            sid=UUID("61d8f457-7c96-432c-9184-0d483b4c87bd"),
-            name="Walter",
-            surname="White",
-            username="Хайзенберг",
-        ),
-        sid=UUID("61d8f457-7c96-432c-9184-0d483b4c87bd"),
-        created_at="2026-05-01T12:00:00Z",
-        updated_at="2026-05-01T12:00:00Z",
-        is_deleted=False,
-    )
-    unread_count: int = 0
-    is_pinned: bool
-    is_muted: bool
-
-
-class Pagination(CoreSchema):
-    total: int
-    limit: int
-    offset: int
 
 
 class GetChatResponse(BaseResponse):
@@ -142,5 +109,5 @@ class GetChatResponse(BaseResponse):
 
 
 class GetChatsResponse(BaseResponse):
-    chats: list[FullChatInfo]
+    chats: list[ShortChatInfo]
     pagination: Pagination

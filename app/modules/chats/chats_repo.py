@@ -3,10 +3,11 @@ from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.sql.base import ExecutableOption
 
 from app.database import Chats, UsersChats
 from app.database.base_repo import BaseRepository
+from app.modules.chats.consts.custom_options import ChatsCustomOptions
 
 
 class ChatsRepository(BaseRepository[Chats]):
@@ -30,7 +31,6 @@ class ChatsRepository(BaseRepository[Chats]):
     async def get_user_chat(
         self, session: AsyncSession, chat_sid: UUID, user_sid: UUID
     ) -> UsersChats | None:
-        """Получение конкретной записи участия пользователя в чате"""
         query = select(UsersChats).where(
             UsersChats.chat_sid == chat_sid,
             UsersChats.user_sid == user_sid,
@@ -42,26 +42,10 @@ class ChatsRepository(BaseRepository[Chats]):
     async def remove_user_from_chat(
         self, session: AsyncSession, chat_sid: UUID, user_sid: UUID
     ) -> None:
-        """Физическое удаление сущности UsersChats (выход из группы / очистка)"""
         user_chat = await self.get_user_chat(session, chat_sid, user_sid)
         if user_chat:
             await session.delete(user_chat)
             await session.flush()
-
-    async def get_filtered(
-        self,
-        session: AsyncSession,
-        user_sid: UUID,
-        skip: int = 0,
-        limit: int = 50,
-    ) -> tuple[Sequence[Chats], int]:
-        subquery = select(UsersChats.chat_sid).where(
-            UsersChats.user_sid == user_sid, UsersChats.left_at.is_(None)
-        )
-
-        query = select(Chats).where(Chats.sid.in_(subquery))
-
-        return await self._apply_pagination(query, session, skip, limit)
 
     async def get_filtered_with_details(
         self,
@@ -70,7 +54,6 @@ class ChatsRepository(BaseRepository[Chats]):
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[Sequence[Chats], int]:
-        """Получение списка чатов пользователя с жадной загрузкой отношений"""
         subquery = select(UsersChats.chat_sid).where(
             UsersChats.user_sid == user_sid, UsersChats.left_at.is_(None)
         )
@@ -78,10 +61,7 @@ class ChatsRepository(BaseRepository[Chats]):
         query = (
             select(Chats)
             .where(Chats.sid.in_(subquery))
-            .options(
-                selectinload(Chats.users_chats).selectinload(UsersChats.users),
-                selectinload(Chats.chat_messages),
-            )
+            .options(*ChatsCustomOptions.with_users_chats_and_users())
         )
 
         return await self._apply_pagination(query, session, skip, limit)
@@ -89,7 +69,6 @@ class ChatsRepository(BaseRepository[Chats]):
     async def find_personal_chat_between_users(
         self, session: AsyncSession, user_sid_1: UUID, user_sid_2: UUID
     ) -> Chats | None:
-        """Поиск существующего личного чата между двумя пользователями"""
         subquery = (
             select(UsersChats.chat_sid)
             .where(UsersChats.user_sid.in_([user_sid_1, user_sid_2]))
@@ -102,29 +81,29 @@ class ChatsRepository(BaseRepository[Chats]):
             .where(Chats.sid.in_(subquery))
             .where(Chats.chat_type == "personal")
         )
+        result = await session.execute(query)
+        return result.scalars().first()
 
+    async def get_chat_with_options(
+        self,
+        session: AsyncSession,
+        chat_sid: UUID,
+        options: tuple[ExecutableOption, ...],
+    ) -> Chats | None:
+        query = select(Chats).where(Chats.sid == chat_sid).options(*options)
         result = await session.execute(query)
         return result.scalars().first()
 
     async def get_chat_with_details(
         self, session: AsyncSession, chat_sid: UUID
     ) -> Chats | None:
-        """Получение полной информации о чате по ID (с подгрузкой сообщений и юзеров)"""
-        query = (
-            select(Chats)
-            .where(Chats.sid == chat_sid)
-            .options(
-                selectinload(Chats.users_chats).selectinload(UsersChats.users),
-                selectinload(Chats.chat_messages),
-            )
+        return await self.get_chat_with_options(
+            session, chat_sid, ChatsCustomOptions.with_all()
         )
-        result = await session.execute(query)
-        return result.scalars().first()
 
     async def remove_all_users_from_chat(
         self, session: AsyncSession, chat_sid: UUID
     ) -> None:
-        """Физическое удаление всех сущностей UsersChats для чата (перед удалением самого чата)"""
         query = select(UsersChats).where(UsersChats.chat_sid == chat_sid)
         result = await session.execute(query)
         users_chats = result.scalars().all()
@@ -135,7 +114,6 @@ class ChatsRepository(BaseRepository[Chats]):
     async def count_chat_participants(
         self, session: AsyncSession, chat_sid: UUID
     ) -> int:
-        """Подсчет количества оставшихся участников в чате"""
         query = (
             select(func.count())
             .select_from(UsersChats)
