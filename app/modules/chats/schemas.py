@@ -7,7 +7,7 @@ from pydantic import model_validator
 
 from app.common.schemas import CoreSchema, Pagination, ResultBase
 from app.modules.messages.schemas import MessageResponse
-from app.modules.users.schemas import UserLastMessage
+from app.modules.users.schemas import UserMessage
 
 avatars = [
     "https://static.wikia.nocookie.net/mems/images/b/b3/%D0%9E%D0%BA%D0%B0%D0%BA.webp/revision/latest/scale-to-width-down/1200?cb=20260102083423&path-prefix=ru",
@@ -82,7 +82,7 @@ class ShortChatInfo(CoreSchema):
         content="Breaking Bad",
         attachments=[],
         reply_to=None,
-        user=UserLastMessage(
+        user=UserMessage(
             sid=UUID("61d8f457-7c96-432c-9184-0d483b4c87bd"),
             name="Walter",
             surname="White",

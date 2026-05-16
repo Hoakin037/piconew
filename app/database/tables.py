@@ -19,7 +19,7 @@ class Users(Base):
     name: Mapped[str] = mapped_column(String(36), nullable=False)
     surname: Mapped[str] = mapped_column(String(36), nullable=False)
     username: Mapped[str] = mapped_column(String(72), nullable=False, unique=True)
-    status: Mapped[str] = mapped_column(String(72), nullable=False)
+    status: Mapped[str] = mapped_column(String(72), nullable=True)
     avatar: Mapped[str] = mapped_column(String(100), nullable=True)
     email: Mapped[str] = mapped_column(String(144), unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -86,15 +86,18 @@ class Messages(Base):
     sender_sid: Mapped[UUID] = mapped_column(ForeignKey("users.sid"), nullable=False)
     chat_sid: Mapped[UUID] = mapped_column(ForeignKey("chats.sid"))
     content: Mapped[str] = mapped_column(String(4000))
+    reply_message_sid: Mapped[UUID | None] = mapped_column(
+        ForeignKey("messages.sid"), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, onupdate=func.now()
     )
-    reply_message_sid: Mapped[UUID | None] = mapped_column(
-        ForeignKey("messages.sid"), nullable=True
-    )
+
+    is_deleted: Mapped[bool] = mapped_column(default=False)
 
     chats: Mapped["Chats"] = relationship("Chats", back_populates="chat_messages")
     users: Mapped["Users"] = relationship("Users", back_populates="users_messages")

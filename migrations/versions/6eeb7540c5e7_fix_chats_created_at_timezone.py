@@ -10,6 +10,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy import Column
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
@@ -30,6 +31,7 @@ def upgrade() -> None:
         existing_nullable=False,
         existing_server_default=sa.text("now()"),
     )
+    op.add_column("messages", Column("is_deleted", type_=sa.Boolean(), default=False))
     # ### end Alembic commands ###
 
 

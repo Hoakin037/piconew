@@ -20,17 +20,16 @@ class UserBase(CoreSchema):
     username: str
     email: str
     avatar: str | None = choice(avatars)
+    status: str | None = "В полете мысли"
 
 
 class UserCreate(UserBase):
-    status: str = ""
     is_active: bool = False
     password: str
 
 
 class UserDTO(UserBase):
     sid: UUID
-    status: str
     is_active: bool
 
 
@@ -44,7 +43,7 @@ class UserResponse(UserBase, ResultResponse):
     pass
 
 
-class UserLastMessage(CoreSchema):
+class UserMessage(CoreSchema):
     sid: UUID
     name: str
     surname: str
