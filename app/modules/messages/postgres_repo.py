@@ -1,9 +1,11 @@
+from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import exists, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database.base_repo import BaseRepository
 from app.database.tables import Messages, UsersChats
@@ -40,3 +42,22 @@ class MessagesRepository(BaseRepository[Messages]):
         res = await session.execute(query)
 
         return res.scalar() or False
+
+    async def get_messages_by_cursor(
+        self, session: AsyncSession, chat_sid: UUID, cursor: UUID | None, limit: int
+    ) -> Sequence[Messages]:
+        query = select(Messages).where(
+            Messages.chat_sid == chat_sid, Messages.is_deleted == False
+        )
+
+        if cursor:
+            query = query.where(Messages.sid < cursor)
+
+        query = (
+            query.order_by(Messages.sid.desc())
+            .limit(limit)
+            .options(selectinload(Messages.user))
+        )
+
+        result = await session.execute(query)
+        return result.scalars().all()

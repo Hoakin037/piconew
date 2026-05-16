@@ -3,11 +3,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.common.core.jwt import get_current_user
-from app.modules import auth, chats
+from app.modules import auth, chats, messages, users
 
 router = APIRouter(prefix="/api")
 router.include_router(auth)
 router.include_router(chats)
+router.include_router(messages, prefix="/chats")
+router.include_router(users)
 
 
 @router.get(path="/chatss", status_code=200)

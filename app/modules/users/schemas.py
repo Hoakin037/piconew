@@ -48,3 +48,4 @@ class UserMessage(CoreSchema):
     name: str
     surname: str
     username: str
+    avatar: str | None = choice(avatars)

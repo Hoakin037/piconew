@@ -55,8 +55,8 @@ class ChatParticipantUser(CoreSchema):
     @model_validator(mode="before")
     @classmethod
     def map_user_fields(cls, data: Any):
-        if hasattr(data, "users") and data.users:
-            user = data.users
+        if hasattr(data, "user") and data.user:
+            user = data.user
             result = {
                 **user.__dict__,
                 "role": data.role,

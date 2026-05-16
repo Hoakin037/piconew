@@ -11,7 +11,7 @@ class ChatsCustomOptions:
 
     @staticmethod
     def with_users_chats_and_users() -> tuple[ExecutableOption, ...]:
-        return (selectinload(Chats.users_chats).selectinload(UsersChats.users),)
+        return (selectinload(Chats.users_chats).selectinload(UsersChats.user),)
 
     @staticmethod
     def with_messages() -> tuple[ExecutableOption, ...]:
@@ -20,6 +20,6 @@ class ChatsCustomOptions:
     @staticmethod
     def with_all() -> tuple[ExecutableOption, ...]:
         return (
-            selectinload(Chats.users_chats).selectinload(UsersChats.users),
+            selectinload(Chats.users_chats).selectinload(UsersChats.user),
             selectinload(Chats.chat_messages),
         )

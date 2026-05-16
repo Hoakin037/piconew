@@ -1,14 +1,19 @@
 from datetime import UTC, datetime
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, Path, Query
 
 from app.common import setup_logging
 from app.common.core import JWTManager, get_jwt_config
+from app.common.core.jwt import get_current_user
 from app.common.core.redis import get_redis_config, init_redis_client
 from app.common.core.sio import sio
 from app.database.db_init import db_manager
-from app.modules.messages.message_service import MessagesService
+from app.modules.messages.message_service import MessagesService, get_messages_service
 from app.modules.messages.postgres_repo import MessagesRepository
 from app.modules.messages.redis_repo import MessagesRedisRepository
-from app.modules.messages.schemas import MessageCreate
+from app.modules.messages.schemas import GetMessagesResponse, MessageCreate
 from app.modules.users.user_repo import UsersRepository
 
 logger = setup_logging(__name__)
@@ -108,3 +113,24 @@ async def handle_join(sid, chat_sid: dict):
         "system_msg", {"text": f"User {sid} joined"}, room=chat_sid["chat_sid"]
     )
     logger.info(f"User {sid} joined room {chat_sid['chat_sid']}")
+
+
+messages_router = APIRouter(prefix="", tags=["Messages"])
+
+
+@messages_router.get(
+    "/{chat_sid}/messages", response_model=GetMessagesResponse, status_code=200
+)
+async def get_chat_messages(
+    current_user: Annotated[UUID, Depends(get_current_user)],
+    messages_service: Annotated[MessagesService, Depends(get_messages_service)],
+    chat_sid: UUID = Path(...),
+    cursor_message_sid: UUID | None = Query(alias="cursorMessageSid", default=None),
+    limit: int = Query(20, ge=1, le=100),
+):
+    return await messages_service.get_chat_messages(
+        user_sid=current_user,
+        chat_sid=chat_sid,
+        cursor=cursor_message_sid,
+        limit=limit,
+    )

@@ -29,10 +29,10 @@ class Users(Base):
     )
 
     users_chats: Mapped[list["UsersChats"]] = relationship(
-        "UsersChats", back_populates="users"
+        "UsersChats", back_populates="user"
     )
     users_messages: Mapped[list["Messages"]] = relationship(
-        "Messages", back_populates="users"
+        "Messages", back_populates="user"
     )
 
 
@@ -74,7 +74,7 @@ class UsersChats(Base):
     )
 
     chats: Mapped["Chats"] = relationship("Chats", back_populates="users_chats")
-    users: Mapped["Users"] = relationship("Users", back_populates="users_chats")
+    user: Mapped["Users"] = relationship("Users", back_populates="users_chats")
 
 
 class Messages(Base):
@@ -100,7 +100,7 @@ class Messages(Base):
     is_deleted: Mapped[bool] = mapped_column(default=False)
 
     chats: Mapped["Chats"] = relationship("Chats", back_populates="chat_messages")
-    users: Mapped["Users"] = relationship("Users", back_populates="users_messages")
+    user: Mapped["Users"] = relationship("Users", back_populates="users_messages")
 
     # Само-связь (ответы)
     replied_to: Mapped[Optional["Messages"]] = relationship(

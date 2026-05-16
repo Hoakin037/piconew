@@ -1,7 +1,8 @@
 from datetime import datetime
 from uuid import UUID
 
-from app.common.schemas import CoreSchema
+from app.common.schemas import CoreSchema, ResultBase
+from app.common.schemas.pagination import CursorPagination
 from app.modules.users.schemas import UserMessage
 
 
@@ -19,12 +20,12 @@ class MessageResponse(CoreSchema):
 
     content: str
     attachments: list = []
-    reply_to: None
+    reply_to: None | UUID = None
 
     user: UserMessage
 
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime | None = None
     is_deleted: bool = False
 
 
@@ -36,3 +37,9 @@ class MessageCreate(CoreSchema):
     content: str
     reply_message_sid: None | UUID = None
     created_at: datetime | None = None
+
+
+class GetMessagesResponse(CoreSchema):
+    result: ResultBase
+    items: list[MessageResponse]
+    pagination: CursorPagination

@@ -1,5 +1,6 @@
 import asyncio
 from datetime import UTC, datetime
+from uuid import UUID
 
 from fastapi import Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,10 +12,15 @@ from app.common.consts import CommonCodesEnum
 from app.common.core.redis import get_redis_manager
 from app.common.errors import BackendException
 from app.common.schemas import ResultBase
+from app.common.schemas.pagination import CursorPagination
 from app.database.db_init import db_manager, get_session
 from app.modules.messages.postgres_repo import MessagesRepository
 from app.modules.messages.redis_repo import MessagesRedisRepository
-from app.modules.messages.schemas import MessageCreate
+from app.modules.messages.schemas import (
+    GetMessagesResponse,
+    MessageCreate,
+    MessageResponse,
+)
 from app.modules.users.user_repo import UsersRepository
 
 logger = setup_logging(__name__)
@@ -85,7 +91,32 @@ class MessagesService:
                 logger.info(f"Сообщение {data['sid']} сохранено в БД")
             except Exception as e:
                 await session.rollback()
-                logger.info(f"Ошибка сохранения сообщения {data.get('sid')}: {e}")
+                logger.error(f"Ошибка сохранения сообщения {data.get('sid')}: {e}")
+
+    async def get_chat_messages(
+        self, user_sid: UUID, chat_sid: UUID, cursor: UUID | None, limit: int
+    ) -> GetMessagesResponse:
+        is_member = await self.msg_repo.check_user_membership(
+            self.session, user_sid, chat_sid
+        )
+        if not is_member:
+            raise BackendException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED),
+                detail="Вы не являетесь участником чата",
+            )
+
+        messages = await self.msg_repo.get_messages_by_cursor(
+            self.session, chat_sid, cursor, limit
+        )
+
+        items = [MessageResponse.model_validate(message) for message in messages]
+
+        return GetMessagesResponse(
+            result=ResultBase(code=CommonCodesEnum.DEFAULT),
+            items=items,
+            pagination=CursorPagination(total=len(items), limit=limit),
+        )
 
 
 async def get_messages_service(
