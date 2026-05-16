@@ -8,6 +8,7 @@ from app.database.db_init import db_manager
 from app.modules.messages.message_service import MessagesService
 from app.modules.messages.postgres_repo import MessagesRepository
 from app.modules.messages.redis_repo import MessagesRedisRepository
+from app.modules.messages.schemas import MessageCreate
 from app.modules.users.user_repo import UsersRepository
 
 logger = setup_logging(__name__)
@@ -82,8 +83,11 @@ async def handle_send_message(sid: str, data: dict):
         )
 
         try:
-            data["sender_sid"] = user_sid
-            response = await service.process_message(data)
+            message = MessageCreate(
+                **data,
+                sender_sid=user_sid,
+            )
+            response = await service.process_message(message)
 
             await sio.emit("new_message", response, room=str(data.get("chat_sid")))
 
