@@ -17,6 +17,7 @@ from app.modules.chats.chats_repo import ChatsRepository, get_chats_repo
 from app.modules.users.schemas import UserMessage
 from app.modules.users.user_repo import UsersRepository, get_user_repo
 
+from .options import MessagesCustomOptions
 from .postgres_repo import MessagesRepository, get_msg_repo
 from .redis_repo import MessagesRedisRepository, get_redis_repo
 from .schemas import (
@@ -110,10 +111,9 @@ class MessagesService:
                 detail="Чат не найден",
             )
 
-        is_member = await self.msg_repo.check_user_membership(
+        if not await self.msg_repo.check_user_membership(
             self.session, user_sid, chat_sid
-        )
-        if not is_member:
+        ):
             raise BackendException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED),
@@ -137,6 +137,35 @@ class MessagesService:
                 total=total_count, limit=limit, has_more=has_more
             ),
         )
+
+    async def get_message(
+        self,
+        user_sid: UUID,
+        message_sid: UUID,
+    ):
+        message = await self.msg_repo.get_by_sid(
+            self.session,
+            message_sid,
+            custom_options=(*MessagesCustomOptions.with_user(),),
+        )
+
+        if not message:
+            raise BackendException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                result=ResultBase(code=CommonCodesEnum.NOT_FOUND),
+                detail="Сообщение не найдено",
+            )
+
+        if not await self.msg_repo.check_user_membership(
+            self.session, user_sid, message.chat_sid
+        ):
+            raise BackendException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED),
+                detail="Вы не являетесь участником чата",
+            )
+
+        return MessageResponse.model_validate(message)
 
 
 async def get_messages_service(

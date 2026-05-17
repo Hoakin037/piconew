@@ -105,3 +105,19 @@ async def get_chat_messages(
         cursor=cursor_message_sid,
         limit=limit,
     )
+
+
+@router.get(
+    path="/message/{message_sid}",
+    status_code=status.HTTP_200_OK,
+    response_model=MessageResponse,
+)
+async def get_message(
+    current_user: Annotated[UUID, Depends(get_current_user)],
+    messages_service: Annotated[MessagesService, Depends(get_messages_service)],
+    message_sid: UUID = Path(...),
+):
+    return await messages_service.get_message(
+        message_sid=message_sid,
+        user_sid=current_user,
+    )
