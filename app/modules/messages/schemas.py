@@ -6,6 +6,18 @@ from app.common.schemas.pagination import CursorPagination
 from app.modules.users.schemas import UserMessage
 
 
+class MessageSession(CoreSchema):
+    user_sid: str
+    token: str
+    connected_at: str
+
+
+class MessageSend(CoreSchema):
+    content: str
+    attachments: list[str] = []
+    reply_to: None
+
+
 class MessageBase(CoreSchema):
     chat_sid: UUID
     content: str
@@ -19,7 +31,7 @@ class MessageResponse(CoreSchema):
     chat_sid: UUID
 
     content: str
-    attachments: list = []
+    attachments: list[str] = []
     reply_to: None | UUID = None
 
     user: UserMessage

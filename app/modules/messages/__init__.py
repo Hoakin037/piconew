@@ -1,1 +1,1 @@
-from .routes import messages_router
+from .routes import router

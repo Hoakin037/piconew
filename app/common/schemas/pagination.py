@@ -9,3 +9,4 @@ class Pagination(CoreSchema):
 class CursorPagination(CoreSchema):
     total: int
     limit: int
+    has_more: bool

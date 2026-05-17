@@ -10,3 +10,7 @@ manager = socketio.AsyncRedisManager(
 sio = socketio.AsyncServer(
     async_mode="asgi", cors_allowed_origins="*", client_manager=manager
 )
+
+
+def get_sio_server() -> socketio.AsyncServer:
+    return sio

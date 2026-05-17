@@ -120,3 +120,7 @@ class ChatsRepository(BaseRepository[Chats]):
             .where(UsersChats.chat_sid == chat_sid)
         )
         return await session.scalar(query) or 0
+
+
+async def get_chats_repo():
+    return ChatsRepository()
