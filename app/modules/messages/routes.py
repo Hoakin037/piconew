@@ -15,6 +15,8 @@ from app.modules.messages.utils import parse_jwt_token
 from .message_service import MessagesService, get_messages_service
 from .schemas import (
     GetMessagesResponse,
+    MessageDeleteResponse,
+    MessageEdit,
     MessageResponse,
     MessageSend,
     MessageSession,
@@ -121,3 +123,49 @@ async def get_message(
         message_sid=message_sid,
         user_sid=current_user,
     )
+
+
+@router.patch(
+    path="/message/{message_sid}",
+    status_code=status.HTTP_200_OK,
+    response_model=MessageResponse,
+)
+async def edit_message(
+    request: MessageEdit,
+    current_user: Annotated[UUID, Depends(get_current_user)],
+    messages_service: Annotated[MessagesService, Depends(get_messages_service)],
+    sio_server: Annotated[AsyncServer, Depends(get_sio_server)],
+    message_sid: UUID = Path(...),
+):
+    updated_message = await messages_service.edit_message(
+        user_sid=current_user, message_sid=message_sid, content=request.content
+    )
+
+    # message_dict = updated_message.model_dump(mode="json")
+    # await sio_server.emit("new_message", message_dict, room=str(updated_message.chat_sid))
+
+    return updated_message
+
+
+@router.delete(
+    path="/message/{message_sid}",
+    status_code=status.HTTP_200_OK,
+    response_model=MessageDeleteResponse,
+)
+async def delete_message(
+    current_user: Annotated[UUID, Depends(get_current_user)],
+    messages_service: Annotated[MessagesService, Depends(get_messages_service)],
+    sio_server: Annotated[AsyncServer, Depends(get_sio_server)],
+    message_sid: UUID = Path(...),
+):
+    deleted_msg_sid, chat_sid = await messages_service.delete_message(
+        user_sid=current_user, message_sid=message_sid
+    )
+
+    # await sio_server.emit(
+    #     "delete_message",
+    #     {"message_sid": str(deleted_msg_sid)},
+    #     room=str(chat_sid)
+    # )
+
+    return MessageDeleteResponse(message_sid=deleted_msg_sid)

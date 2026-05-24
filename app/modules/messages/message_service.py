@@ -13,6 +13,7 @@ from app.common.errors import BackendException
 from app.common.schemas import ResultBase
 from app.common.schemas.pagination import CursorPagination
 from app.database.db_init import get_session
+from app.database.tables import Messages
 from app.modules.chats.chats_repo import ChatsRepository, get_chats_repo
 from app.modules.users.schemas import UserMessage
 from app.modules.users.user_repo import UsersRepository, get_user_repo
@@ -45,7 +46,24 @@ class MessagesService:
         self.redis_repo = redis_repo
         self.chats_repo = chats_repo
 
-    async def _validate_chat_and_membership(self, user_sid: UUID, chat_sid: UUID):
+    async def get_message_by_sid(self, sid: UUID) -> Messages:
+        message = await self.msg_repo.get_by_sid(
+            self.session,
+            sid,
+            custom_options=(*MessagesCustomOptions.with_user(),),
+        )
+
+        if not message:
+            raise BackendException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                result=ResultBase(code=CommonCodesEnum.NOT_FOUND),
+                detail="Сообщение не найдено",
+            )
+        return message
+
+    async def _validate_chat_and_membership(
+        self, user_sid: UUID, chat_sid: UUID
+    ) -> None:
         chat = await self.chats_repo.get_by_sid(self.session, chat_sid)
         if not chat:
             raise BackendException(
@@ -143,18 +161,7 @@ class MessagesService:
         user_sid: UUID,
         message_sid: UUID,
     ):
-        message = await self.msg_repo.get_by_sid(
-            self.session,
-            message_sid,
-            custom_options=(*MessagesCustomOptions.with_user(),),
-        )
-
-        if not message:
-            raise BackendException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                result=ResultBase(code=CommonCodesEnum.NOT_FOUND),
-                detail="Сообщение не найдено",
-            )
+        message = await self.get_message_by_sid(message_sid)
 
         if not await self.msg_repo.check_user_membership(
             self.session, user_sid, message.chat_sid
@@ -166,6 +173,61 @@ class MessagesService:
             )
 
         return MessageResponse.model_validate(message)
+
+    async def edit_message(
+        self, user_sid: UUID, message_sid: UUID, content: str
+    ) -> MessageResponse:
+        message = await self.get_message_by_sid(message_sid)
+
+        await self._validate_chat_and_membership(user_sid, message.chat_sid)
+
+        if str(message.sender_sid) != str(user_sid):
+            raise BackendException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED),
+                detail="Редактировать можно только свои сообщения",
+            )
+
+        updated_message = await self.msg_repo.update(
+            self.session, message, {"content": content, "updated_at": datetime.now(UTC)}
+        )
+        await self.session.commit()
+
+        response = MessageResponse.model_validate(updated_message)
+
+        await self.redis_repo.cache_message(
+            message.chat_sid, response.model_dump(mode="json")
+        )
+
+        return response
+
+    async def delete_message(
+        self, user_sid: UUID, message_sid: UUID
+    ) -> tuple[UUID, UUID]:
+        message = await self.msg_repo.get_by_sid(self.session, message_sid)
+
+        if not message:
+            raise BackendException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                result=ResultBase(code=CommonCodesEnum.NOT_FOUND),
+                detail="Сообщение не найдено",
+            )
+
+        await self._validate_chat_and_membership(user_sid, message.chat_sid)
+
+        if str(message.sender_sid) != str(user_sid):
+            raise BackendException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED),
+                detail="Удалить можно только свое сообщение",
+            )
+
+        chat_sid = message.chat_sid
+
+        await self.msg_repo.delete(self.session, message)
+        await self.session.commit()
+
+        return message_sid, chat_sid
 
 
 async def get_messages_service(

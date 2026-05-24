@@ -55,3 +55,11 @@ class GetMessagesResponse(CoreSchema):
     result: ResultBase
     items: list[MessageResponse]
     pagination: CursorPagination
+
+
+class MessageEdit(CoreSchema):
+    content: str
+
+
+class MessageDeleteResponse(CoreSchema):
+    message_sid: UUID
