@@ -2,7 +2,7 @@ from random import choice
 from typing import Literal
 from uuid import UUID
 
-from app.common.schemas import CoreSchema, ResultResponse
+from app.common.schemas import CoreSchema, Pagination, ResultBase
 
 avatars = [
     "https://static.wikia.nocookie.net/mems/images/b/b3/%D0%9E%D0%BA%D0%B0%D0%BA.webp/revision/latest/scale-to-width-down/1200?cb=20260102083423&path-prefix=ru",
@@ -39,8 +39,8 @@ class ChatParticipant(UserBase):
     left_at: str
 
 
-class UserResponse(UserBase, ResultResponse):
-    pass
+class UserResponse(UserBase):
+    sid: UUID
 
 
 class UserMessage(CoreSchema):
@@ -49,3 +49,14 @@ class UserMessage(CoreSchema):
     surname: str
     username: str
     avatar: str | None = choice(avatars)
+
+
+class UserSearch(CoreSchema):
+    search: str
+
+
+class GetUsersResponse(CoreSchema):
+    result: ResultBase
+    items: list[UserResponse]
+    pagination: Pagination
+    total: int

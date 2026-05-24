@@ -222,7 +222,8 @@ class ChatsService:
         return GetChatsResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
             chats=chat_infos,
-            pagination=Pagination(total=total, limit=limit, offset=skip),
+            pagination=Pagination(limit=limit, offset=skip),
+            total=total,
         )
 
     async def delete_chat(self, chat_sid: UUID, current_user_sid: UUID) -> None:

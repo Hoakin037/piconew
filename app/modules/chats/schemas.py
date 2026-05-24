@@ -111,3 +111,4 @@ class GetChatResponse(BaseResponse):
 class GetChatsResponse(BaseResponse):
     chats: list[ShortChatInfo]
     pagination: Pagination
+    total: int

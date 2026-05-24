@@ -4,7 +4,9 @@ from fastapi import APIRouter, Depends, Query
 
 from app.common.consts import CommonCodesEnum
 from app.common.core.jwt import get_current_user
-from app.common.schemas import ResultBase
+from app.common.schemas import Pagination, ResultBase
+from app.modules.users import UserService, get_user_service
+from app.modules.users.schemas import GetUsersResponse
 
 from .chats_service import ChatsService, get_chats_service
 from .schemas import (
@@ -100,3 +102,22 @@ async def leave_chat(
     """
     await chats_service.leave_or_clear_chat(chat_sid, current_user)
     return BaseResponse(result=ResultBase(code=CommonCodesEnum.DEFAULT))
+
+
+@chats.get("/{chat_sid}/users", response_model=GetUsersResponse)
+async def search_users_for_chat(
+    chat_sid: UUID,
+    current_user: UUID = Depends(get_current_user),
+    user_service: UserService = Depends(get_user_service),
+    search_query: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1),
+    offset: int = Query(default=0, ge=0),
+):
+    pagination_params = Pagination(limit=limit, offset=offset)
+
+    return await user_service.search_users_for_chat(
+        user_sid=current_user,
+        chat_sid=chat_sid,
+        search_query=search_query,
+        pagination_params=pagination_params,
+    )

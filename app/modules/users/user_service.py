@@ -6,10 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.consts import CommonCodesEnum
 from app.common.errors import BackendException
-from app.common.schemas import ResultBase
+from app.common.schemas import Pagination, ResultBase
 from app.database import Users, get_session
 
-from .schemas import UserCreate, UserDTO
+from .schemas import GetUsersResponse, UserCreate, UserDTO, UserResponse
 from .user_repo import UsersRepository, get_user_repo
 
 
@@ -28,9 +28,7 @@ class UserService:
         user = None
 
         if user_sid is not None:
-            user = await self.user_repo.get_by_sid(
-                self.session, user_sid
-            )  # Исправлено: session сначала
+            user = await self.user_repo.get_by_sid(self.session, user_sid)
         elif username is not None:
             user = await self.user_repo.get_user_by_username(username, self.session)
         elif email is not None:
@@ -52,6 +50,54 @@ class UserService:
         await self.session.refresh(user_to_create)
 
         return UserDTO.model_validate(user_to_create)
+
+    async def search_global_users(
+        self,
+        user_sid: UUID,
+        search_query: str | None,
+        pagination_params: Pagination,
+    ) -> GetUsersResponse:
+        users, total = await self.user_repo.search_users(
+            session=self.session,
+            current_user_sid=user_sid,
+            search_query=search_query,
+            skip=pagination_params.offset,
+            limit=pagination_params.limit,
+        )
+
+        return GetUsersResponse(
+            result=ResultBase(code=CommonCodesEnum.DEFAULT),
+            items=[UserResponse.model_validate(user) for user in users],
+            pagination=Pagination(
+                limit=pagination_params.limit, offset=pagination_params.offset
+            ),
+            total=total,
+        )
+
+    async def search_users_for_chat(
+        self,
+        user_sid: UUID,
+        chat_sid: UUID,
+        search_query: str | None,
+        pagination_params: Pagination,
+    ) -> GetUsersResponse:
+        users, total = await self.user_repo.search_users_for_chat(
+            session=self.session,
+            current_user_sid=user_sid,
+            chat_sid=chat_sid,
+            search_query=search_query,
+            skip=pagination_params.offset,
+            limit=pagination_params.limit,
+        )
+
+        return GetUsersResponse(
+            result=ResultBase(code=CommonCodesEnum.DEFAULT),
+            items=[UserResponse.model_validate(user) for user in users],
+            pagination=Pagination(
+                limit=pagination_params.limit, offset=pagination_params.offset
+            ),
+            total=total,
+        )
 
 
 async def get_user_service(

@@ -2,10 +2,8 @@
 name = "pico"
 version = "0.1.0"
 description = ""
-authors = [
-    {name = "Hoakin", email = "Hoakin037@gmail.com"}
-]
-requires-python = ">=3.13"
+
+requires-python = ">=3.12"
 dependencies = [
     "pwdlib[argon2] (>=0.3.0,<0.4.0)",
     "fastapi>=0.135.2,<0.136.0",
