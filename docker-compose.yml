@@ -1,8 +1,8 @@
 services:
   postgres:
-    image: postgres:16.2-alpine
-    container_name: pico-postgres
-    restart: unless-stopped
+    image: postgres:15-alpine
+    container_name: pico_postgres
+    restart: always
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -13,41 +13,36 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   redis:
-    image: redis:6-alpine
-    container_name: pico-redis
-    restart: unless-stopped
+    image: redis:7-alpine
+    container_name: pico_redis
+    restart: always
+    environment:
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_DECODE_RESPONSES: ${REDIS_DECODE_RESPONSES}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+      - "6380:6379"
     volumes:
       - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
 
-  web:
-    build:
-      context: .
-      dockerfile: deploy/Dockerfile
-    container_name: pico_web
-    restart: unless-stopped
-    ports:
-      - "8005:8000"
-    env_file:
-      - .env
-    volumes:
-      - .:/app
-    depends_on:
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_started
+  pico-minio:
+    container_name: pico-minio
+    image: minio/minio:latest
     environment:
-      - REDIS_HOST=redis
-      - DB_HOST=postgres
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+    ports:
+      - "9015:9000"
+      - "9016:9001"
+    volumes:
+      - pico-minio-data:/var/lib/pico-minio
+      - pico-minio-storage:/data
+    restart: on-failure
 
 volumes:
   postgres_data:
   redis_data:
+  pico-minio-data:
+  pico-minio-storage:
