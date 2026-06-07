@@ -9,6 +9,8 @@ from app.common.consts import CommonCodesEnum
 from app.common.errors import BackendException
 from app.common.schemas import ResultBase
 from app.database import Chats, get_session
+from app.modules.messages.postgres_repo import MessagesRepository, get_msg_repo
+from app.modules.messages.schemas import MessageResponse
 from app.modules.users.user_service import UserService, get_user_service
 
 from .chats_repo import ChatsRepository
@@ -46,16 +48,51 @@ class ChatsService:
         self,
         session: AsyncSession,
         chats_repo: ChatsRepository,
+        message_repo: MessagesRepository,
         user_service: UserService,
     ):
         self.session = session
         self.chats_repo = chats_repo
         self.user_service = user_service
+        self.message_repo = message_repo
+
+    async def create_notes(self, current_user_sid: UUID) -> GetChatResponse:
+        current_user = await self.user_service.get_user(
+            user_sid=current_user_sid, as_model=True
+        )
+        if not current_user:
+            raise BackendException(
+                status_code=404,
+                result=ResultBase(code=CommonCodesEnum.NOT_FOUND),
+            )
+
+        chat_name = "Избранное"
+
+        new_chat = await self.chats_repo.create(
+            session=self.session,
+            obj=Chats(
+                chat_type="personal",
+                avatar="https://clck.ru/3U3BvD",
+            ),
+        )
+        await self.session.flush()
+
+        await self.chats_repo.add_participant(
+            user_sid=current_user_sid,
+            session=self.session,
+            chat_sid=new_chat.sid,
+            avatar=choice(avatars),
+            chat_name=chat_name,
+            role="admin",
+        )
+
+        await self.session.commit()
+
+        return await self.get_chat_by_id(current_user_sid, new_chat.sid)
 
     async def create_personal_chat(
         self, current_user_sid: UUID, receiver_sid: UUID
     ) -> GetChatResponse:
-        """Создание личного чата"""
         receiver = await self.user_service.get_user(
             user_sid=receiver_sid, as_model=True
         )
@@ -77,12 +114,10 @@ class ChatsService:
         current_user = await self.user_service.get_user(
             user_sid=current_user_sid, as_model=True
         )
-        chat_name = f"{current_user.name} {current_user.surname} & {receiver.name} {receiver.surname}"
 
         new_chat = await self.chats_repo.create(
             session=self.session,
             obj=Chats(
-                chat_name=chat_name,
                 chat_type="personal",
                 avatar=None,
             ),
@@ -90,21 +125,29 @@ class ChatsService:
         await self.session.flush()
 
         await self.chats_repo.add_participant(
-            self.session, current_user_sid, new_chat.sid, "admin"
+            session=self.session,
+            user_sid=current_user_sid,
+            chat_name=receiver.name + receiver.surname,
+            avatar=choice(avatars),
+            chat_sid=new_chat.sid,
+            role="admin",
         )
         await self.chats_repo.add_participant(
-            self.session, receiver_sid, new_chat.sid, "admin"
+            session=self.session,
+            user_sid=receiver_sid,
+            chat_sid=new_chat.sid,
+            chat_name=current_user.name + current_user.surname,
+            avatar=choice(avatars),
+            role="admin",
         )
 
         await self.session.commit()
 
-        # После создания получаем полную информацию через get_chat_by_id (он использует get_chat_with_details)
         return await self.get_chat_by_id(current_user_sid, new_chat.sid)
 
     async def create_group_chat(
         self, current_user_sid: UUID, chat_name: str
     ) -> GetChatResponse:
-        """Создание группового чата"""
         new_chat = await self.chats_repo.create(
             session=self.session,
             obj=Chats(
@@ -121,7 +164,6 @@ class ChatsService:
 
         await self.session.commit()
 
-        # Перезагружаем чат с подгрузкой всех связей
         chat_with_details = await self.chats_repo.get_chat_with_options(
             self.session, new_chat.sid, ChatsCustomOptions.with_all()
         )
@@ -135,33 +177,36 @@ class ChatsService:
             chat=await self._map_chat_to_full_info(chat_with_details, current_user_sid),
         )
 
-    @staticmethod
     async def _map_chat_to_short_info(
-        chat: Chats, current_user_sid: UUID
+        self, chat: Chats, current_user_sid: UUID
     ) -> ShortChatInfo:
-        """Маппинг чата в ShortChatInfo DTO (для списка чатов)"""
         user_chat = None
         for uc in chat.users_chats:
             if str(uc.user_sid) == str(current_user_sid):
                 user_chat = uc
                 break
 
+        last_message = await self.message_repo.get_last_message_in_chat(
+            session=self.session, chat_sid=chat.sid
+        )
+
         return ShortChatInfo(
             sid=chat.sid,
             type=chat.chat_type,
-            chatName=chat.chat_name,
-            avatar=chat.avatar or choice(avatars),
+            chat_name=user_chat.chat_name,
+            avatar=user_chat.avatar,
             unread_count=0,
             is_pinned=user_chat.is_pinned if user_chat else False,
             is_muted=user_chat.is_muted if user_chat else False,
             created_at=chat.created_at.isoformat() if chat.created_at else "",
+            last_message=MessageResponse.model_validate(last_message)
+            if last_message
+            else None,
         )
 
-    @staticmethod
     async def _map_chat_to_full_info(
-        chat: Chats, current_user_sid: UUID
+        self, chat: Chats, current_user_sid: UUID
     ) -> FullChatInfo:
-        """Маппинг чата в FullChatInfo DTO (для конкретного чата)"""
         participants = []
         user_chat = None
 
@@ -170,21 +215,30 @@ class ChatsService:
                 user_chat = uc
             participants.append(ChatParticipantUser.model_validate(uc))
 
+        current_user_chat = await self.chats_repo.get_user_chat(
+            session=self.session, user_sid=current_user_sid, chat_sid=chat.sid
+        )
+        last_message = await self.message_repo.get_last_message_in_chat(
+            session=self.session, chat_sid=chat.sid
+        )
+
         return FullChatInfo(
             sid=chat.sid,
             type=chat.chat_type,
-            chatName=chat.chat_name,
-            avatar=chat.avatar or choice(avatars),
+            chat_name=current_user_chat.chat_name,
+            avatar=current_user_chat.avatar,
             unread_count=0,
             participants=participants,
             is_pinned=user_chat.is_pinned if user_chat else False,
             is_muted=user_chat.is_muted if user_chat else False,
-            created_at=chat.created_at.isoformat() if chat.created_at else "",
+            created_at=chat.created_at.isoformat(),
             attachments=[],
+            last_message=MessageResponse.model_validate(last_message)
+            if last_message
+            else None,
         )
 
     async def get_chat_by_id(self, user_sid: UUID, chat_sid: UUID) -> GetChatResponse:
-        """Получение полной информации о чате по ID"""
         chat = await self.chats_repo.get_chat_with_details(self.session, chat_sid)
 
         if not chat:
@@ -210,7 +264,6 @@ class ChatsService:
     async def get_user_chats(
         self, user_sid: UUID, skip: int = 0, limit: int = 50
     ) -> GetChatsResponse:
-        """Получение всех чатов пользователя с пагинацией (упрощенный вид)"""
         chats, total = await self.chats_repo.get_filtered_with_details(
             self.session, user_sid, skip, limit
         )
@@ -227,7 +280,6 @@ class ChatsService:
         )
 
     async def delete_chat(self, chat_sid: UUID, current_user_sid: UUID) -> None:
-        """Удаление группы (только админ может удалить)"""
         user_chat = await self.chats_repo.get_user_chat(
             self.session, chat_sid, current_user_sid
         )
@@ -260,75 +312,16 @@ class ChatsService:
 
         await self.session.commit()
 
-    async def update_chat_settings(
-        self,
-        chat_sid: UUID,
-        current_user_sid: UUID,
-        chat_name: str = None,
-        avatar: str = None,
-        is_pinned: bool = None,
-        is_muted: bool = None,
-    ) -> None:
-        user_chat = await self.chats_repo.get_user_chat(
-            self.session, chat_sid, current_user_sid
-        )
-
-        if not user_chat:
-            raise BackendException(
-                status_code=403,
-                result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED),
-            )
-
-        update_data = {}
-
-        if chat_name is not None:
-            if user_chat.role != "admin":
-                raise BackendException(
-                    status_code=403,
-                    result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED),
-                )
-            chat = await self.chats_repo.get_by_sid(self.session, chat_sid)
-            if chat:
-                update_data["chat_name"] = chat_name
-
-        if avatar is not None:
-            chat = await self.chats_repo.get_by_sid(self.session, chat_sid)
-            if chat and user_chat.role == "admin":
-                update_data["avatar"] = avatar
-
-        if is_pinned is not None:
-            update_data["is_pinned"] = is_pinned
-        if is_muted is not None:
-            update_data["is_muted"] = is_muted
-
-        if update_data:
-            if "chat_name" in update_data or "avatar" in update_data:
-                chat = await self.chats_repo.get_by_sid(self.session, chat_sid)
-                if chat:
-                    chat_update = {
-                        k: v
-                        for k, v in update_data.items()
-                        if k in ["chat_name", "avatar"]
-                    }
-                    if chat_update:
-                        await self.chats_repo.update(self.session, chat, chat_update)
-
-            user_update = {
-                k: v for k, v in update_data.items() if k in ["is_pinned", "is_muted"]
-            }
-            if user_update:
-                await self.chats_repo.update(self.session, user_chat, user_update)
-
-            await self.session.commit()
-
 
 async def get_chats_service(
     session: Annotated[AsyncSession, Depends(get_session)],
     user_service: Annotated[UserService, Depends(get_user_service)],
+    message_repo: Annotated[MessagesRepository, Depends(get_msg_repo)],
 ) -> ChatsService:
     chats_repo = ChatsRepository()
     return ChatsService(
         session=session,
         chats_repo=chats_repo,
         user_service=user_service,
+        message_repo=message_repo,
     )

@@ -106,7 +106,7 @@ class AuthService:
         current_user = await self.get_user(email=user.email, as_model=True)
         if not self._pwd_context.verify(user.password, current_user.password):
             raise BackendException(
-                status_code=422,
+                status_code=400,
                 result=ResultBase(code=CommonCodesEnum.INCORRECT_PASSWORD),
             )
 

@@ -19,7 +19,6 @@ class UserRegister(UserLogin):
     name: str
     surname: str
     username: str
-    avatar: str
     password: str
 
 

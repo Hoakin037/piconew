@@ -73,6 +73,20 @@ class MessagesRepository(BaseRepository[Messages]):
 
         return messages_result.scalars().all(), count_result.scalar_one() or 0
 
+    async def get_last_message_in_chat(
+        self, session: AsyncSession, chat_sid: UUID
+    ) -> Messages | None:
+        """Получить последнее сообщение в чате по chat_sid."""
+        query = (
+            select(Messages)
+            .where(Messages.chat_sid == chat_sid, Messages.is_deleted == False)
+            .order_by(Messages.created_at.desc(), Messages.sid.desc())
+            .limit(1)
+            .options(selectinload(Messages.user))
+        )
+        result = await session.execute(query)
+        return result.scalars().first()
+
 
 async def get_msg_repo():
     return MessagesRepository()

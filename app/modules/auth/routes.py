@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.common.consts import CommonCodesEnum
 from app.common.schemas import ResultBase, ResultResponse
+from app.modules.chats.chats_service import ChatsService, get_chats_service
 from app.modules.users import UserService, get_user_service
 
 from .auth_service import AuthService, get_auth_service
@@ -21,9 +22,13 @@ async def register_new_user(
     user: UserRegister,
     user_service: UserService = Depends(get_user_service),
     auth_service: AuthService = Depends(get_auth_service),
+    chats_service: ChatsService = Depends(get_chats_service),
 ):
     new_user = await auth_service.register_user(user)
-    await user_service.create_user(new_user)
+    new_user = await user_service.create_user(new_user)
+
+    # Создаем персональный чат с избранными (заметки)
+    await chats_service.create_notes(current_user_sid=new_user.sid)
 
     return ResultResponse(
         result=ResultBase(

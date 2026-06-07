@@ -19,10 +19,17 @@ class ChatsRepository(BaseRepository[Chats]):
         session: AsyncSession,
         user_sid: UUID,
         chat_sid: UUID,
+        avatar: str | None,
+        chat_name: str,
         role: str = "member",
     ) -> UsersChats:
         user_chat = UsersChats(
-            user_sid=user_sid, chat_sid=chat_sid, role=role, left_at=None
+            user_sid=user_sid,
+            chat_sid=chat_sid,
+            role=role,
+            left_at=None,
+            avatar=avatar,
+            chat_name=chat_name,
         )
         session.add(user_chat)
         await session.flush()

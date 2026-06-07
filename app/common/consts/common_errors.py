@@ -13,3 +13,4 @@ class CommonCodesEnum(IntEnum):
     UNKNOWN_ERROR = 8
     VALIDATION_ERROR = 9
     CHAT_ALREADY_EXISTS = 10
+    RECEIVER_ID_EQ_USER_ID = 11

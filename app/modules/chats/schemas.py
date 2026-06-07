@@ -7,7 +7,6 @@ from pydantic import model_validator
 
 from app.common.schemas import CoreSchema, Pagination, ResultBase
 from app.modules.messages.schemas import MessageResponse
-from app.modules.users.schemas import UserMessage
 
 avatars = [
     "https://static.wikia.nocookie.net/mems/images/b/b3/%D0%9E%D0%BA%D0%B0%D0%BA.webp/revision/latest/scale-to-width-down/1200?cb=20260102083423&path-prefix=ru",
@@ -75,24 +74,9 @@ class ChatParticipant(CoreSchema):
 class ShortChatInfo(CoreSchema):
     sid: UUID
     type: Literal["personal", "group"]
-    chatName: str
+    chat_name: str
     avatar: str | None = choice(avatars)
-    last_message: MessageResponse = MessageResponse(
-        chat_sid=UUID("b870ee88-cdc6-49ea-920a-996e16992d9d"),
-        content="Breaking Bad",
-        attachments=[],
-        reply_to=None,
-        user=UserMessage(
-            sid=UUID("61d8f457-7c96-432c-9184-0d483b4c87bd"),
-            name="Walter",
-            surname="White",
-            username="Хайзенберг",
-        ),
-        sid=UUID("61d8f457-7c96-432c-9184-0d483b4c87bd"),
-        created_at="2026-05-01T12:00:00Z",
-        updated_at="2026-05-01T12:00:00Z",
-        is_deleted=False,
-    )
+    last_message: MessageResponse | None
     unread_count: int = 0
     is_pinned: bool
     is_muted: bool

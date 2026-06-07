@@ -15,7 +15,6 @@ from .schemas import (
     CreateGroupRequest,
     GetChatResponse,
     GetChatsResponse,
-    UpdateChatRequest,
 )
 
 chats = APIRouter(prefix="/chats", tags=["Chats"])
@@ -60,24 +59,6 @@ async def get_chat_by_id(
     chats_service: ChatsService = Depends(get_chats_service),
 ):
     return await chats_service.get_chat_by_id(current_user, chat_sid)
-
-
-@chats.put("/{chat_sid}", response_model=BaseResponse)
-async def update_chat(
-    chat_sid: UUID,
-    request: UpdateChatRequest,
-    current_user: UUID = Depends(get_current_user),
-    chats_service: ChatsService = Depends(get_chats_service),
-):
-    await chats_service.update_chat_settings(
-        chat_sid=chat_sid,
-        current_user_sid=current_user,
-        chat_name=request.chat_name,
-        avatar=request.avatar,
-        is_pinned=request.is_pinned,
-        is_muted=request.is_muted,
-    )
-    return BaseResponse(result=ResultBase(code=CommonCodesEnum.DEFAULT))
 
 
 @chats.delete("/{chat_sid}", response_model=BaseResponse)
