@@ -1,10 +1,12 @@
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import Annotated
 
 import aioboto3
 from aiobotocore.client import AioBaseClient
 from botocore.client import Config
+from fastapi import Depends
 
-from app.common.core.s3_settings import S3Settings
+from app.common.core.s3_settings import S3Settings, get_s3_settings
 
 
 class S3Connect:
@@ -27,6 +29,12 @@ class S3Connect:
         return self._get_client()
 
 
+async def get_s3_client(
+    settings: Annotated[S3Settings, Depends(get_s3_settings)],
+) -> S3Connect:
+    return S3Connect(settings=settings)
+
+
 class S3SessionProvider:
     def __init__(self, s3_client: S3Connect):
         self._s3_client = s3_client
@@ -36,3 +44,9 @@ class S3SessionProvider:
         cm = await self._s3_client.get_connect()
         async with cm as client:
             yield client
+
+
+async def get_s3_session_provider(
+    s3_client: Annotated[S3Connect, Depends(get_s3_client)],
+) -> S3SessionProvider:
+    return S3SessionProvider(s3_client=s3_client)
