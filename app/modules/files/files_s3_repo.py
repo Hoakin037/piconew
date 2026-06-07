@@ -1,7 +1,8 @@
 from typing import Annotated
 
-from client import S3SessionProvider, get_s3_session_provider
 from fastapi import Depends
+
+from app.client import S3SessionProvider, get_s3_session_provider
 
 
 class FilesS3Repository:

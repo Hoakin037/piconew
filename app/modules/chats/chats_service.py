@@ -1,4 +1,3 @@
-from random import choice
 from typing import Annotated
 from uuid import UUID
 
@@ -23,24 +22,6 @@ from .schemas import (
     Pagination,
     ShortChatInfo,
 )
-
-avatars = [
-    "https://static.wikia.nocookie.net/mems/images/b/b3/%D0%9E%D0%BA%D0%B0%D0%BA.webp/revision/latest/scale-to-width-down/1200?cb=20260102083423&path-prefix=ru",
-    "https://spbcult.ru/upload/iblock/7b9/9n0tc4etzlpw3t1h1021gjzhwl226j5k.jpg",
-    "https://sobakovod.club/uploads/posts/2021-12/1640661699_6-sobakovod-club-p-sobaki-sobaka-mem-8.jpg",
-    "https://i.pinimg.com/originals/6f/b7/26/6fb726d46f5894ed0c67399b8b42f4c0.jpg",
-    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRAoIwxxUyWwjjPlHfFOG7_vXwn19Muf8B8QA&s",
-    None,
-]
-
-avatars = [
-    "https://static.wikia.nocookie.net/mems/images/b/b3/%D0%9E%D0%BA%D0%B0%D0%BA.webp/revision/latest/scale-to-width-down/1200?cb=20260102083423&path-prefix=ru",
-    "https://spbcult.ru/upload/iblock/7b9/9n0tc4etzlpw3t1h1021gjzhwl226j5k.jpg",
-    "https://sobakovod.club/uploads/posts/2021-12/1640661699_6-sobakovod-club-p-sobaki-sobaka-mem-8.jpg",
-    "https://i.pinimg.com/originals/6f/b7/26/6fb726d46f5894ed0c67399b8b42f4c0.jpg",
-    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRAoIwxxUyWwjjPlHfFOG7_vXwn19Muf8B8QA&s",
-    None,
-]
 
 
 class ChatsService:
@@ -72,7 +53,6 @@ class ChatsService:
             session=self.session,
             obj=Chats(
                 chat_type="personal",
-                avatar="https://clck.ru/3U3BvD",
             ),
         )
         await self.session.flush()
@@ -81,7 +61,7 @@ class ChatsService:
             user_sid=current_user_sid,
             session=self.session,
             chat_sid=new_chat.sid,
-            avatar=choice(avatars),
+            avatar="https://clck.ru/3U3MUQ",
             chat_name=chat_name,
             role="admin",
         )
@@ -128,7 +108,7 @@ class ChatsService:
             session=self.session,
             user_sid=current_user_sid,
             chat_name=receiver.name + receiver.surname,
-            avatar=choice(avatars),
+            avatar=receiver.avatar,
             chat_sid=new_chat.sid,
             role="admin",
         )
@@ -137,7 +117,7 @@ class ChatsService:
             user_sid=receiver_sid,
             chat_sid=new_chat.sid,
             chat_name=current_user.name + current_user.surname,
-            avatar=choice(avatars),
+            avatar=current_user.avatar,
             role="admin",
         )
 

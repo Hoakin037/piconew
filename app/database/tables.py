@@ -126,7 +126,7 @@ class Files(Base):
     sid: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    url: Mapped[str] = mapped_column(String(200), nullable=False)
+    url: Mapped[str] = mapped_column(String(200), nullable=True)
 
     message: Mapped["Messages"] = relationship(
         "Messages",

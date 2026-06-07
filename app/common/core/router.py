@@ -1,19 +1,10 @@
-from uuid import UUID
+from fastapi import APIRouter
 
-from fastapi import APIRouter, Depends, HTTPException
-
-from app.common.core.jwt import get_current_user
-from app.modules import auth, chats, messages, users
+from app.modules import auth, chats, file_roter, messages, users
 
 router = APIRouter(prefix="/api")
 router.include_router(auth)
 router.include_router(chats)
 router.include_router(messages, prefix="/chats")
 router.include_router(users)
-
-
-@router.get(path="/chatss", status_code=200)
-async def check_jwt(current_user: UUID = Depends(get_current_user)):
-    if current_user:
-        return {"user_id": current_user}
-    raise HTTPException(status_code=404, detail="Пользователь не найден")
+router.include_router(file_roter)
