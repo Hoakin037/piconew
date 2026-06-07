@@ -1,21 +1,21 @@
+from datetime import UTC, datetime, timedelta
+from typing import Annotated, Literal
 from uuid import UUID
+
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import (
-    encode,
-    decode,
+    DecodeError,
     ExpiredSignatureError,
     InvalidSignatureError,
-    DecodeError,
+    decode,
+    encode,
 )
-from fastapi import HTTPException, Depends
-from datetime import datetime, timezone, timedelta
-from typing import Literal
-
-from typing import Annotated
 
 from app.common.core.jwt.jwt_config import JWTConfig, get_jwt_config
 
 security = HTTPBearer()
+
 
 class JWTManager:
     def __init__(self, config: JWTConfig):
@@ -31,13 +31,13 @@ class JWTManager:
             # expires_delta = timedelta(minutes=self.config.REFRESH_TOKEN_EXPIRE_DAYS)
         else:
             # expires_delta = timedelta(minutes=self.config.ACCESS_TOKEN_EXPIRE_MIN)
-            expires_delta = timedelta(seconds=60)
-        expire = datetime.now(timezone.utc) + expires_delta
+            expires_delta = timedelta(seconds=3600)
+        expire = datetime.now(UTC) + expires_delta
         payload_copy.update(
             {
                 "type": token_type,
                 "exp": expire.timestamp(),  # Срок действия
-                "iat": datetime.now(timezone.utc).timestamp(),  # Время выпуска
+                "iat": datetime.now(UTC).timestamp(),  # Время выпуска
             }
         )
         return encode(
@@ -64,13 +64,13 @@ class JWTManager:
         return self.config.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
 
 
-
 def get_jwt_manager(config: Annotated[JWTConfig, Depends(get_jwt_config)]):
     return JWTManager(config)
 
+
 async def get_current_user(
-        jwt_manager: Annotated[JWTManager, Depends(get_jwt_manager)],
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]
+    jwt_manager: Annotated[JWTManager, Depends(get_jwt_manager)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],
 ) -> UUID:
     if credentials:
         access_token = credentials.credentials

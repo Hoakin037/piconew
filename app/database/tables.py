@@ -1,9 +1,9 @@
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, ForeignKey, DateTime, func, UUID
-
 import uuid
 from datetime import datetime
 from typing import Optional
+
+from sqlalchemy import UUID, DateTime, ForeignKey, String, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -18,18 +18,21 @@ class Users(Base):
     )
     name: Mapped[str] = mapped_column(String(36), nullable=False)
     surname: Mapped[str] = mapped_column(String(36), nullable=False)
-    username: Mapped[str] = mapped_column(String(72), nullable=False, unique=True )
-    status: Mapped[str] = mapped_column(String(72), nullable=False)
+    username: Mapped[str] = mapped_column(String(72), nullable=False, unique=True)
+    status: Mapped[str] = mapped_column(String(72), nullable=True)
     avatar: Mapped[str] = mapped_column(String(100), nullable=True)
     email: Mapped[str] = mapped_column(String(144), unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String(500), nullable=False)
     is_active: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     users_chats: Mapped[list["UsersChats"]] = relationship(
-        "UsersChats", back_populates="users"
+        "UsersChats", back_populates="user"
     )
     users_messages: Mapped[list["Messages"]] = relationship(
-        "Messages", back_populates="users"
+        "Messages", back_populates="user"
     )
 
 
@@ -39,9 +42,11 @@ class Chats(Base):
     sid: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    chat_name: Mapped[str] = mapped_column(String(72), nullable=False)
     avatar: Mapped[str] = mapped_column(String(100), nullable=True)
     chat_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     users_chats: Mapped[list["UsersChats"]] = relationship(
         "UsersChats", back_populates="chats"
@@ -50,7 +55,7 @@ class Chats(Base):
         "Messages", back_populates="chats"
     )
 
-#
+
 class UsersChats(Base):
     __tablename__ = "userschats"
 
@@ -59,16 +64,18 @@ class UsersChats(Base):
     role: Mapped[str] = mapped_column(String(20), default="admin", nullable=False)
     is_pinned: Mapped[bool] = mapped_column(default=False)
     is_muted: Mapped[bool] = mapped_column(default=False)
+    chat_name: Mapped[str] = mapped_column(String(72), nullable=False)
+    avatar: Mapped[str] = mapped_column(String(100), nullable=True)
 
     joined_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    left_at: Mapped[Optional[datetime]] = mapped_column(
+    left_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
     chats: Mapped["Chats"] = relationship("Chats", back_populates="users_chats")
-    users: Mapped["Users"] = relationship("Users", back_populates="users_chats")
+    user: Mapped["Users"] = relationship("Users", back_populates="users_chats")
 
 
 class Messages(Base):
@@ -80,18 +87,21 @@ class Messages(Base):
     sender_sid: Mapped[UUID] = mapped_column(ForeignKey("users.sid"), nullable=False)
     chat_sid: Mapped[UUID] = mapped_column(ForeignKey("chats.sid"))
     content: Mapped[str] = mapped_column(String(4000))
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True, onupdate=func.now()
-    )
-    reply_message_sid: Mapped[Optional[UUID]] = mapped_column(
+    reply_message_sid: Mapped[UUID | None] = mapped_column(
         ForeignKey("messages.sid"), nullable=True
     )
 
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, onupdate=func.now()
+    )
+
+    is_deleted: Mapped[bool] = mapped_column(default=False)
+
     chats: Mapped["Chats"] = relationship("Chats", back_populates="chat_messages")
-    users: Mapped["Users"] = relationship("Users", back_populates="users_messages")
+    user: Mapped["Users"] = relationship("Users", back_populates="users_messages")
 
     # Само-связь (ответы)
     replied_to: Mapped[Optional["Messages"]] = relationship(

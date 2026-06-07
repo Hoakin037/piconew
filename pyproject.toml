@@ -2,10 +2,8 @@
 name = "pico"
 version = "0.1.0"
 description = ""
-authors = [
-    {name = "Hoakin", email = "Hoakin037@gmail.com"}
-]
-requires-python = ">=3.13"
+
+requires-python = ">=3.12"
 dependencies = [
     "pwdlib[argon2] (>=0.3.0,<0.4.0)",
     "fastapi>=0.135.2,<0.136.0",
@@ -17,7 +15,11 @@ dependencies = [
     "pydantic[email] (>=2.12.5,<3.0.0)",
     "asyncpg (>=0.31.0,<0.32.0)",
     "alembic (>=1.18.4,<2.0.0)",
-    "psycopg2 (>=2.9.11,<3.0.0)",
+    "psycopg2-binary (>=2.9.11,<3.0.0)",
+    "uuid6 (>=2025.0.1,<2026.0.0)",
+    "python-socketio (>=5.16.1,<6.0.0)",
+    "colorama (>=0.4.6,<0.5.0)",
+    "aioboto3 (>=15.5.0,<16.0.0)",
 ]
 
 [build-system]
