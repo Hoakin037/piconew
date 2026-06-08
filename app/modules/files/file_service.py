@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import Depends, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,14 +23,26 @@ class FilesService:
         self.s3_repo = s3_files_repo
         self.session = session
 
-    async def create_file(self, file: UploadFile) -> AttachmentBase:
+    async def upload_file(
+        self, file: UploadFile, type: Literal["chat", "user"], sid: UUID
+    ) -> str:
+        return await self.s3_repo.put_object(
+            data=file.file.read(), url=f"{type}/{sid}/{file.filename}"
+        )
+
+    async def create_file(self, file: UploadFile, temp=True) -> AttachmentBase:
         new_file = await self.files_repo.create(self.session, Files())
 
-        await self.session.flush()
         filename = file.filename
 
-        url = await self.s3_repo.put_temp_object(
-            data=file.file.read(), url=f"files/{new_file.sid}/{filename}"
+        url = (
+            await self.s3_repo.put_temp_object(
+                data=file.file.read(), url=f"files/{new_file.sid}/{filename}"
+            )
+            if temp
+            else await self.s3_repo.put_object(
+                data=file.file.read(), url=f"files/{new_file.sid}/{filename}"
+            )
         )
         new_file = await self.files_repo.update(self.session, new_file, {"url": url})
 

@@ -1,7 +1,7 @@
-from random import choice
 from typing import Annotated
 from uuid import UUID
 
+from fastapi import UploadFile
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,24 +9,22 @@ from app.common.consts import CommonCodesEnum
 from app.common.errors import BackendException
 from app.common.schemas import Pagination, ResultBase
 from app.database import Users, get_session
+from app.modules.files.file_service import FilesService, get_file_service
 
 from .schemas import GetUsersResponse, UserCreate, UserDTO, UserResponse
 from .user_repo import UsersRepository, get_user_repo
 
-avatars = [
-    "https://static.wikia.nocookie.net/mems/images/b/b3/%D0%9E%D0%BA%D0%B0%D0%BA.webp/revision/latest/scale-to-width-down/1200?cb=20260102083423&path-prefix=ru",
-    "https://spbcult.ru/upload/iblock/7b9/9n0tc4etzlpw3t1h1021gjzhwl226j5k.jpg",
-    "https://sobakovod.club/uploads/posts/2021-12/1640661699_6-sobakovod-club-p-sobaki-sobaka-mem-8.jpg",
-    "https://i.pinimg.com/originals/6f/b7/26/6fb726d46f5894ed0c67399b8b42f4c0.jpg",
-    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRAoIwxxUyWwjjPlHfFOG7_vXwn19Muf8B8QA&s",
-    None,
-]
-
 
 class UserService:
-    def __init__(self, user_repo: UsersRepository, session: AsyncSession):
+    def __init__(
+        self,
+        user_repo: UsersRepository,
+        session: AsyncSession,
+        file_service: FilesService,
+    ):
         self.user_repo = user_repo
         self.session = session
+        self.file_service = file_service
 
     async def get_user(
         self,
@@ -54,8 +52,6 @@ class UserService:
         return UserDTO.model_validate(user)
 
     async def create_user(self, user: UserCreate) -> UserDTO:
-        user.avatar = choice(avatars)
-        print("aa")
         user_to_create = Users(**user.model_dump())
         await self.user_repo.create(obj=user_to_create, session=self.session)
         await self.session.commit()
@@ -111,9 +107,32 @@ class UserService:
             total=total,
         )
 
+    async def upload_user_avatar(
+        self, user_sid: UUID, file: UploadFile
+    ) -> UserResponse:
+        user = await self.get_user(user_sid, as_model=True)
+
+        url = await self.file_service.upload_file(
+            file=file,
+            type="user",
+            sid=user_sid,
+        )
+        user = await self.user_repo.update(
+            obj=user,
+            session=self.session,
+            update_data={
+                "avatar": url,
+            },
+        )
+        await self.session.commit()
+        await self.session.refresh(user)
+
+        return UserResponse.model_validate(user)
+
 
 async def get_user_service(
     user_repo: Annotated[UsersRepository, Depends(get_user_repo)],
     session: Annotated[AsyncSession, Depends(get_session)],
+    file_service: Annotated[FilesService, Depends(get_file_service)],
 ) -> UserService:
-    return UserService(user_repo=user_repo, session=session)
+    return UserService(user_repo=user_repo, session=session, file_service=file_service)
