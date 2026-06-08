@@ -1,8 +1,8 @@
 """add files
 
-Revision ID: 8a072f9eef3e
+Revision ID: 5f432565f271
 Revises: 65c4401e493b
-Create Date: 2026-06-07 17:03:55.586140
+Create Date: 2026-06-08 22:02:27.570264
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '8a072f9eef3e'
+revision: str = '5f432565f271'
 down_revision: Union[str, Sequence[str], None] = '65c4401e493b'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -30,6 +30,7 @@ def upgrade() -> None:
                existing_type=sa.VARCHAR(length=100),
                type_=sa.String(length=200),
                existing_nullable=True)
+    op.add_column('messages', sa.Column('files_ids', sa.ARRAY(sa.UUID()), nullable=True))
     op.alter_column('users', 'avatar',
                existing_type=sa.VARCHAR(length=100),
                type_=sa.String(length=200),
@@ -52,6 +53,7 @@ def downgrade() -> None:
                existing_type=sa.String(length=200),
                type_=sa.VARCHAR(length=100),
                existing_nullable=True)
+    op.drop_column('messages', 'files_ids')
     op.alter_column('chats', 'avatar',
                existing_type=sa.String(length=200),
                type_=sa.VARCHAR(length=100),

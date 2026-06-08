@@ -1,4 +1,5 @@
 from os.path import basename
+from pathlib import Path
 from uuid import UUID
 
 from pydantic import computed_field
@@ -18,4 +19,5 @@ class AttachmentBase(CoreSchema):
     @computed_field
     @property
     def extension(self) -> str:
-        return self.filename.split(".")[-1]
+        filename = self.filename
+        return Path(filename).suffix

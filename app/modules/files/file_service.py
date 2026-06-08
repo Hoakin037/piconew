@@ -7,6 +7,7 @@ from uuid6 import UUID
 from app.database import get_session
 from app.database.tables import Files
 
+from . import AttachmentBase
 from .files_repo import FilesRepo, get_files_repo
 from .files_s3_repo import FilesS3Repository, get_files_s3_repo
 
@@ -22,16 +23,21 @@ class FilesService:
         self.s3_repo = s3_files_repo
         self.session = session
 
-    async def create_file(self, file: UploadFile) -> Files:
+    async def create_file(self, file: UploadFile) -> AttachmentBase:
         new_file = await self.files_repo.create(self.session, Files())
-        url = self.s3_repo.put_temp_object(
-            data=file.file.read(), url=f"files/{new_file.sid}"
+
+        await self.session.flush()
+        filename = file.filename
+
+        url = await self.s3_repo.put_temp_object(
+            data=file.file.read(), url=f"files/{new_file.sid}/{filename}"
         )
         new_file = await self.files_repo.update(self.session, new_file, {"url": url})
+
         await self.session.commit()
         await self.session.refresh(new_file)
 
-        return new_file
+        return AttachmentBase.model_validate(new_file)
 
     async def replace_file_from_temp(self, file_sid: UUID) -> Files:
         file = await self.files_repo.get_by_sid(self.session, file_sid)

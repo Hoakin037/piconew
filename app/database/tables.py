@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import UUID, DateTime, ForeignKey, String, func
+from sqlalchemy import ARRAY, UUID, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -99,6 +99,9 @@ class Messages(Base):
     )
 
     is_deleted: Mapped[bool] = mapped_column(default=False)
+    files_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(UUID(as_uuid=True)), nullable=True
+    )
 
     chats: Mapped["Chats"] = relationship("Chats", back_populates="chat_messages")
     user: Mapped["Users"] = relationship("Users", back_populates="users_messages")
@@ -114,12 +117,6 @@ class Messages(Base):
         back_populates="replied_to",
     )
 
-    # Вложения
-    attachments: Mapped[list["Files"]] = relationship(
-        "FilesModel",
-        back_populates="message",
-    )
-
 
 class Files(Base):
     __tablename__ = "files"
@@ -127,8 +124,3 @@ class Files(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     url: Mapped[str] = mapped_column(String(200), nullable=True)
-
-    message: Mapped["Messages"] = relationship(
-        "Messages",
-        back_populates="attachments",
-    )
