@@ -28,7 +28,7 @@ class UserLoginResponse(UserTokens, ResultResponse):
     surname: str
     username: str
     email: str
-    avatar: str
+    avatar: str | None
 
 
 class UserRefreshToken(CoreSchema):

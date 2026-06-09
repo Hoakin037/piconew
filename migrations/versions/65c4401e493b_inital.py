@@ -26,6 +26,7 @@ def upgrade() -> None:
         sa.Column("sid", sa.UUID(), nullable=False),
         sa.Column("avatar", sa.String(length=200), nullable=True),
         sa.Column("chat_type", sa.String(length=20), nullable=False),
+        sa.Column("chat_name", sa.String(length=72), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

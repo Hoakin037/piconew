@@ -1,6 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
+from fastapi import UploadFile
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +9,7 @@ from app.common.consts import CommonCodesEnum
 from app.common.errors import BackendException
 from app.common.schemas import ResultBase
 from app.database import Chats, get_session
+from app.modules.files.file_service import FilesService, get_file_service
 from app.modules.messages.postgres_repo import MessagesRepository, get_msg_repo
 from app.modules.messages.schemas import MessageResponse
 from app.modules.users.user_service import UserService, get_user_service
@@ -16,6 +18,7 @@ from .chats_repo import ChatsRepository
 from .consts.custom_options import ChatsCustomOptions
 from .schemas import (
     ChatParticipantUser,
+    CreateGroupRequest,
     FullChatInfo,
     GetChatResponse,
     GetChatsResponse,
@@ -31,11 +34,13 @@ class ChatsService:
         chats_repo: ChatsRepository,
         message_repo: MessagesRepository,
         user_service: UserService,
+        file_service: FilesService,
     ):
         self.session = session
         self.chats_repo = chats_repo
         self.user_service = user_service
         self.message_repo = message_repo
+        self.file_service = file_service
 
     async def create_notes(self, current_user_sid: UUID) -> GetChatResponse:
         current_user = await self.user_service.get_user(
@@ -98,7 +103,7 @@ class ChatsService:
         new_chat = await self.chats_repo.create(
             session=self.session,
             obj=Chats(
-                chat_type="personal",
+                chat_type="chat",
                 avatar=None,
             ),
         )
@@ -126,12 +131,14 @@ class ChatsService:
         return await self.get_chat_by_id(current_user_sid, new_chat.sid)
 
     async def create_group_chat(
-        self, current_user_sid: UUID, chat_name: str
+        self,
+        current_user_sid: UUID,
+        group_info: CreateGroupRequest,
     ) -> GetChatResponse:
         new_chat = await self.chats_repo.create(
             session=self.session,
             obj=Chats(
-                chat_name=chat_name,
+                chat_name=group_info.chat_name,
                 chat_type="group",
                 avatar=None,
             ),
@@ -139,8 +146,21 @@ class ChatsService:
         await self.session.flush()
 
         await self.chats_repo.add_participant(
-            self.session, current_user_sid, new_chat.sid, "admin"
+            self.session,
+            user_sid=current_user_sid,
+            chat_sid=new_chat.sid,
+            avatar=new_chat.avatar,
+            chat_name=new_chat.chat_name,
+            role="admin",
         )
+        for user in group_info.members:
+            await self.chats_repo.add_participant(
+                self.session,
+                chat_sid=user,
+                avatar=new_chat.avatar,
+                chat_name=new_chat.chat_name,
+                role="member",
+            )
 
         await self.session.commit()
 
@@ -155,6 +175,41 @@ class ChatsService:
         return GetChatResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
             chat=await self._map_chat_to_full_info(chat_with_details, current_user_sid),
+        )
+
+    async def add_group_members(
+        self, group_sid: UUID, user_sid: UUID, members: list[UUID]
+    ) -> GetChatResponse:
+        chat = await self.get_chat_by_id(
+            user_sid=user_sid, chat_sid=group_sid, as_model=True
+        )
+
+        if not await self.chats_repo.check_if_user_admin(
+            chat_sid=group_sid, user_sid=user_sid, session=self.session
+        ):
+            raise BackendException(
+                status_code=403, result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED)
+            )
+
+        for user in members:
+            await self.chats_repo.add_participant(
+                self.session, user, group_sid, "member", chat_name=chat.chat_name
+            )
+
+        await self.session.commit()
+        self.session.expire_all()
+
+        chat_with_details = await self.chats_repo.get_chat_with_options(
+            self.session, group_sid, ChatsCustomOptions.with_all()
+        )
+        if not chat_with_details:
+            raise BackendException(
+                status_code=404, result=ResultBase(code=CommonCodesEnum.NOT_FOUND)
+            )
+
+        return GetChatResponse(
+            result=ResultBase(code=CommonCodesEnum.DEFAULT),
+            chat=await self._map_chat_to_full_info(chat_with_details, user_sid),
         )
 
     async def _map_chat_to_short_info(
@@ -173,8 +228,10 @@ class ChatsService:
         return ShortChatInfo(
             sid=chat.sid,
             type=chat.chat_type,
-            chat_name=user_chat.chat_name,
-            avatar=user_chat.avatar,
+            chat_name=user_chat.chat_name
+            if chat.chat_type == "personal"
+            else chat.chat_name,
+            avatar=user_chat.avatar if chat.chat_type == "personal" else chat.avatar,
             unread_count=0,
             is_pinned=user_chat.is_pinned if user_chat else False,
             is_muted=user_chat.is_muted if user_chat else False,
@@ -205,8 +262,12 @@ class ChatsService:
         return FullChatInfo(
             sid=chat.sid,
             type=chat.chat_type,
-            chat_name=current_user_chat.chat_name,
-            avatar=current_user_chat.avatar,
+            chat_name=current_user_chat.chat_name
+            if chat.chat_type == "personal"
+            else chat.chat_name,
+            avatar=current_user_chat.avatar
+            if chat.chat_type == "personal"
+            else chat.avatar,
             unread_count=0,
             participants=participants,
             is_pinned=user_chat.is_pinned if user_chat else False,
@@ -218,7 +279,9 @@ class ChatsService:
             else None,
         )
 
-    async def get_chat_by_id(self, user_sid: UUID, chat_sid: UUID) -> GetChatResponse:
+    async def get_chat_by_id(
+        self, user_sid: UUID, chat_sid: UUID, as_model: bool = False
+    ) -> GetChatResponse | Chats:
         chat = await self.chats_repo.get_chat_with_details(self.session, chat_sid)
 
         if not chat:
@@ -235,6 +298,9 @@ class ChatsService:
                 status_code=403,
                 result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED),
             )
+
+        if as_model:
+            return chat
 
         return GetChatResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
@@ -292,11 +358,35 @@ class ChatsService:
 
         await self.session.commit()
 
+    async def set_group_avatar(
+        self, chat_sid: UUID, file: UploadFile, user_sid: UUID
+    ) -> GetChatResponse:
+        chat = await self.get_chat_by_id(user_sid, chat_sid, as_model=True)
+
+        url = await self.file_service.upload_file(file=file, type="chat", sid=chat_sid)
+
+        chat = await self.chats_repo.update(
+            self.session, obj=chat, update_data={"avatar": url}
+        )
+        await self.session.commit()
+        await self.session.refresh(chat)
+        print(chat.avatar)
+
+        chat_with_details = await self.chats_repo.get_chat_with_options(
+            self.session, chat_sid, ChatsCustomOptions.with_all()
+        )
+
+        return GetChatResponse(
+            result=ResultBase(code=CommonCodesEnum.DEFAULT),
+            chat=await self._map_chat_to_full_info(chat_with_details, user_sid),
+        )
+
 
 async def get_chats_service(
     session: Annotated[AsyncSession, Depends(get_session)],
     user_service: Annotated[UserService, Depends(get_user_service)],
     message_repo: Annotated[MessagesRepository, Depends(get_msg_repo)],
+    file_service: Annotated[FilesService, Depends(get_file_service)],
 ) -> ChatsService:
     chats_repo = ChatsRepository()
     return ChatsService(
@@ -304,4 +394,5 @@ async def get_chats_service(
         chats_repo=chats_repo,
         user_service=user_service,
         message_repo=message_repo,
+        file_service=file_service,
     )

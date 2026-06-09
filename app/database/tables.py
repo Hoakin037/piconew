@@ -47,6 +47,7 @@ class Chats(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    chat_name: Mapped[str] = mapped_column(String(72), nullable=True)
 
     users_chats: Mapped[list["UsersChats"]] = relationship(
         "UsersChats", back_populates="chats"

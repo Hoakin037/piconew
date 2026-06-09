@@ -128,6 +128,16 @@ class ChatsRepository(BaseRepository[Chats]):
         )
         return await session.scalar(query) or 0
 
+    async def check_if_user_admin(
+        self, chat_sid: UUID, user_sid: UUID, session: AsyncSession
+    ) -> bool:
+        query = select(UsersChats.role).where(
+            UsersChats.chat_sid == chat_sid, UsersChats.user_sid == user_sid
+        )
+        result = await session.execute(query)
+        result = result.scalars().first()
+        return result == "admin"
+
 
 async def get_chats_repo():
     return ChatsRepository()

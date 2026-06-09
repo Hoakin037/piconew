@@ -94,7 +94,7 @@ class AuthService:
 
         if any([username, email]):
             raise BackendException(
-                status_code=422,
+                status_code=400,
                 result=ResultBase(code=CommonCodesEnum.USER_ALREADY_EXISTS),
             )
 
