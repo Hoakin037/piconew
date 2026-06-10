@@ -15,6 +15,8 @@ from app.common.schemas.pagination import CursorPagination
 from app.database.db_init import get_session
 from app.database.tables import Messages
 from app.modules.chats.chats_repo import ChatsRepository, get_chats_repo
+from app.modules.files import AttachmentBase
+from app.modules.files.file_service import FilesService, get_file_service
 from app.modules.users.schemas import UserMessage
 from app.modules.users.user_repo import UsersRepository, get_user_repo
 
@@ -39,12 +41,14 @@ class MessagesService:
         user_repo: UsersRepository,
         redis_repo: MessagesRedisRepository,
         chats_repo: ChatsRepository,
+        file_service: FilesService,
     ):
         self.session = session
         self.msg_repo = msg_repo
         self.user_repo = user_repo
         self.redis_repo = redis_repo
         self.chats_repo = chats_repo
+        self.file_service = file_service
 
     async def get_message_by_sid(self, sid: UUID) -> Messages:
         message = await self.msg_repo.get_by_sid(
@@ -87,12 +91,18 @@ class MessagesService:
     ) -> MessageResponse:
         await self._validate_chat_and_membership(sender_sid, chat_sid)
 
+        attachments = []
+        if message_send.attachments:
+            for file_uuid in message_send.attachments:
+                file = await self.file_service.replace_file_from_temp(file_uuid)
+                attachments.append(file.sid)
+
         message_create = MessageCreate(
             sid=uuid7(),
             chat_sid=chat_sid,
             sender_sid=sender_sid,
             content=message_send.content,
-            attachments=message_send.attachments,
+            attachments=attachments,
             reply_message_sid=message_send.reply_to,
             created_at=datetime.now(UTC),
         )
@@ -105,13 +115,20 @@ class MessagesService:
             self.session, new_message_db.user.sid
         )
 
-        message = MessageResponse.model_validate(new_message_db)
+        files = await self.file_service.files_repo.get_files_by_ids(
+            attachments, self.session
+        )
+        message = MessageResponse(
+            **new_message_db.__dict__,
+            attachments=[AttachmentBase.model_validate(file) for file in files],
+        )
 
         message.user = UserMessage(
             sid=new_message_db.user.sid,
             name=user_info.name,
             surname=user_info.surname,
             username=user_info.username,
+            avatar=user_info.avatar,
         )
 
         await self.redis_repo.cache_message(chat_sid, message.model_dump(mode="json"))
@@ -236,6 +253,7 @@ async def get_messages_service(
     user_repo: Annotated[UsersRepository, Depends(get_user_repo)],
     redis_repo: Annotated[MessagesRedisRepository, Depends(get_redis_repo)],
     chats_repo: Annotated[ChatsRepository, Depends(get_chats_repo)],
+    file_service: Annotated[FilesService, Depends(get_file_service)],
 ) -> MessagesService:
     return MessagesService(
         session=session,
@@ -243,4 +261,5 @@ async def get_messages_service(
         user_repo=user_repo,
         redis_repo=redis_repo,
         chats_repo=chats_repo,
+        file_service=file_service,
     )

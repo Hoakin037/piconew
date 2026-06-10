@@ -4,7 +4,11 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.client.s3_provider import (
+    S3Connect,  # ← добавь импорт
+)
 from app.common import setup_logging
+from app.common.core.s3_settings import get_s3_settings
 from app.common.errors import BackendException
 from app.database import db_manager
 
@@ -34,6 +38,14 @@ async def lifespan(app: FastAPI):
 
     await db_manager.database_init()
     logger.info("Успешное подключение к базе данных.")
+
+    try:
+        settings = get_s3_settings()
+        s3_connect = S3Connect(settings=settings)  # ← Прямое создание
+        await s3_connect.init_buckets()
+        logger.info("S3 бакеты инициализированы (files, temp)")
+    except Exception as e:
+        logger.error(f" Ошибка инициализации S3 бакетов: {e}")
 
     yield
 

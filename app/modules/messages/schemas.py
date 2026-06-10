@@ -3,6 +3,7 @@ from uuid import UUID
 
 from app.common.schemas import CoreSchema, ResultBase
 from app.common.schemas.pagination import CursorPagination
+from app.modules.files import AttachmentBase
 from app.modules.users.schemas import UserMessage
 
 
@@ -31,7 +32,7 @@ class MessageResponse(CoreSchema):
     chat_sid: UUID
 
     content: str
-    attachments: list[UUID]
+    attachments: list[AttachmentBase]
     reply_to: None | UUID = None
 
     user: UserMessage

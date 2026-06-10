@@ -32,7 +32,7 @@ class FilesService:
 
     async def create_file(self, file: UploadFile, temp=True) -> AttachmentBase:
         new_file = await self.files_repo.create(self.session, Files())
-
+        await self.session.flush()
         filename = file.filename
 
         url = (
@@ -53,7 +53,12 @@ class FilesService:
 
     async def replace_file_from_temp(self, file_sid: UUID) -> Files:
         file = await self.files_repo.get_by_sid(self.session, file_sid)
-        url = self.s3_repo.copy_object(source_url=file.url, new_url="/files/{file.sid}")
+        file_dto = AttachmentBase.model_validate(file)
+
+        url = await self.s3_repo.copy_object(
+            source_url=file_dto.url, new_url=f"files/{file_dto.sid}/{file_dto.filename}"
+        )
+
         new_file = await self.files_repo.update(self.session, file, {"url": url})
         await self.session.commit()
         await self.session.refresh(new_file)
