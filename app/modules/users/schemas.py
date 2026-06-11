@@ -1,7 +1,7 @@
 from typing import Literal
 from uuid import UUID
 
-from app.common.schemas import CoreSchema, Pagination, ResultBase
+from app.common.schemas import CoreSchema, ResultBase
 from app.common.schemas.pagination import PaginationResult
 
 

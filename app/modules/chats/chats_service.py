@@ -8,12 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.consts import CommonCodesEnum
 from app.common.errors import BackendException
 from app.common.schemas import ResultBase
+from app.common.schemas.pagination import PaginationResult
 from app.database import Chats, get_session
 from app.modules.files.file_service import FilesService, get_file_service
 from app.modules.messages.postgres_repo import MessagesRepository, get_msg_repo
 from app.modules.messages.schemas import MessageResponse
 from app.modules.users.user_service import UserService, get_user_service
-from app.common.schemas.pagination import PaginationResult
 
 from .chats_repo import ChatsRepository
 from .consts.custom_options import ChatsCustomOptions
@@ -23,7 +23,6 @@ from .schemas import (
     FullChatInfo,
     GetChatResponse,
     GetChatsResponse,
-    Pagination,
     ShortChatInfo,
 )
 
@@ -232,8 +231,11 @@ class ChatsService:
         if chat.chat_type == "personal":
             avatar = user_chat.avatar if user_chat else None
         elif chat.chat_type == "chat":
-            avatar = other_chat.user.avatar if other_chat and other_chat.user else (
-                user_chat.avatar if user_chat else None)
+            avatar = (
+                other_chat.user.avatar
+                if other_chat and other_chat.user
+                else (user_chat.avatar if user_chat else None)
+            )
         else:
             avatar = chat.avatar
 
@@ -250,10 +252,7 @@ class ChatsService:
             is_pinned=user_chat.is_pinned if user_chat else False,
             is_muted=user_chat.is_muted if user_chat else False,
             created_at=chat.created_at.isoformat() if chat.created_at else "",
-            last_message=MessageResponse(
-                **last_message.__dict__,
-                attachments=[]
-            )
+            last_message=MessageResponse(**last_message.__dict__, attachments=[])
             if last_message
             else None,
         )
@@ -279,8 +278,11 @@ class ChatsService:
         if chat.chat_type == "personal":
             avatar = user_chat.avatar if user_chat else None
         elif chat.chat_type == "chat":
-            avatar = other_chat.user.avatar if other_chat and other_chat.user else (
-                user_chat.avatar if user_chat else None)
+            avatar = (
+                other_chat.user.avatar
+                if other_chat and other_chat.user
+                else (user_chat.avatar if user_chat else None)
+            )
         else:
             avatar = chat.avatar
 
@@ -299,10 +301,9 @@ class ChatsService:
             is_muted=user_chat.is_muted if user_chat else False,
             created_at=chat.created_at.isoformat(),
             attachments=[],
-            last_message=MessageResponse(
-                **last_message.__dict__,
-                attachments=[]
-            ) if last_message else None,
+            last_message=MessageResponse(**last_message.__dict__, attachments=[])
+            if last_message
+            else None,
         )
 
     async def get_chat_by_id(
@@ -395,7 +396,6 @@ class ChatsService:
         )
         await self.session.commit()
         await self.session.refresh(chat)
-
 
         chat_with_details = await self.chats_repo.get_chat_with_options(
             self.session, chat_sid, ChatsCustomOptions.with_all()

@@ -4,9 +4,9 @@ from uuid import UUID
 
 from pydantic import model_validator
 
-from app.common.schemas import CoreSchema, Pagination, ResultBase
-from app.modules.messages.schemas import MessageResponse
+from app.common.schemas import CoreSchema, ResultBase
 from app.common.schemas.pagination import PaginationResult
+from app.modules.messages.schemas import MessageResponse
 
 
 class BaseResponse(CoreSchema):
