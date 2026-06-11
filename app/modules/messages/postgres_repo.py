@@ -77,6 +77,7 @@ class MessagesRepository(BaseRepository[Messages]):
         self, session: AsyncSession, chat_sid: UUID
     ) -> Messages | None:
         """Получить последнее сообщение в чате по chat_sid."""
+
         query = (
             select(Messages)
             .where(Messages.chat_sid == chat_sid, Messages.is_deleted == False)

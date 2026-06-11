@@ -13,6 +13,7 @@ from app.modules.files.file_service import FilesService, get_file_service
 from app.modules.messages.postgres_repo import MessagesRepository, get_msg_repo
 from app.modules.messages.schemas import MessageResponse
 from app.modules.users.user_service import UserService, get_user_service
+from app.common.schemas.pagination import PaginationResult
 
 from .chats_repo import ChatsRepository
 from .consts.custom_options import ChatsCustomOptions
@@ -66,7 +67,7 @@ class ChatsService:
             user_sid=current_user_sid,
             session=self.session,
             chat_sid=new_chat.sid,
-            avatar="https://clck.ru/3U3MUQ",
+            avatar="https://img.icons8.ru/?size=48&id=26089&format=png",
             chat_name=chat_name,
             role="admin",
         )
@@ -216,27 +217,43 @@ class ChatsService:
         self, chat: Chats, current_user_sid: UUID
     ) -> ShortChatInfo:
         user_chat = None
+        other_chat = None
+
         for uc in chat.users_chats:
             if str(uc.user_sid) == str(current_user_sid):
                 user_chat = uc
-                break
+            else:
+                other_chat = uc
 
         last_message = await self.message_repo.get_last_message_in_chat(
             session=self.session, chat_sid=chat.sid
         )
 
+        if chat.chat_type == "personal":
+            avatar = user_chat.avatar if user_chat else None
+        elif chat.chat_type == "chat":
+            avatar = other_chat.user.avatar if other_chat and other_chat.user else (
+                user_chat.avatar if user_chat else None)
+        else:
+            avatar = chat.avatar
+
         return ShortChatInfo(
             sid=chat.sid,
             type=chat.chat_type,
-            chat_name=user_chat.chat_name
-            if chat.chat_type == "personal"
-            else chat.chat_name,
-            avatar=user_chat.avatar if chat.chat_type == "personal" else chat.avatar,
+            chat_name=(
+                user_chat.chat_name
+                if chat.chat_type in ("chat", "personal")
+                else chat.chat_name
+            ),
+            avatar=avatar,
             unread_count=0,
             is_pinned=user_chat.is_pinned if user_chat else False,
             is_muted=user_chat.is_muted if user_chat else False,
             created_at=chat.created_at.isoformat() if chat.created_at else "",
-            last_message=MessageResponse.model_validate(last_message)
+            last_message=MessageResponse(
+                **last_message.__dict__,
+                attachments=[]
+            )
             if last_message
             else None,
         )
@@ -246,37 +263,46 @@ class ChatsService:
     ) -> FullChatInfo:
         participants = []
         user_chat = None
+        other_chat = None
 
         for uc in chat.users_chats:
             if str(uc.user_sid) == str(current_user_sid):
                 user_chat = uc
+            else:
+                other_chat = uc
             participants.append(ChatParticipantUser.model_validate(uc))
 
-        current_user_chat = await self.chats_repo.get_user_chat(
-            session=self.session, user_sid=current_user_sid, chat_sid=chat.sid
-        )
         last_message = await self.message_repo.get_last_message_in_chat(
             session=self.session, chat_sid=chat.sid
         )
 
+        if chat.chat_type == "personal":
+            avatar = user_chat.avatar if user_chat else None
+        elif chat.chat_type == "chat":
+            avatar = other_chat.user.avatar if other_chat and other_chat.user else (
+                user_chat.avatar if user_chat else None)
+        else:
+            avatar = chat.avatar
+
         return FullChatInfo(
             sid=chat.sid,
             type=chat.chat_type,
-            chat_name=current_user_chat.chat_name
-            if chat.chat_type == "personal"
-            else chat.chat_name,
-            avatar=current_user_chat.avatar
-            if chat.chat_type == "personal"
-            else chat.avatar,
+            chat_name=(
+                user_chat.chat_name
+                if chat.chat_type in ("chat", "personal")
+                else chat.chat_name
+            ),
+            avatar=avatar,
             unread_count=0,
             participants=participants,
             is_pinned=user_chat.is_pinned if user_chat else False,
             is_muted=user_chat.is_muted if user_chat else False,
             created_at=chat.created_at.isoformat(),
             attachments=[],
-            last_message=MessageResponse.model_validate(last_message)
-            if last_message
-            else None,
+            last_message=MessageResponse(
+                **last_message.__dict__,
+                attachments=[]
+            ) if last_message else None,
         )
 
     async def get_chat_by_id(
@@ -321,8 +347,7 @@ class ChatsService:
         return GetChatsResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
             chats=chat_infos,
-            pagination=Pagination(limit=limit, offset=skip),
-            total=total,
+            pagination=PaginationResult(limit=limit, offset=skip, total=total),
         )
 
     async def delete_chat(self, chat_sid: UUID, current_user_sid: UUID) -> None:
@@ -370,7 +395,7 @@ class ChatsService:
         )
         await self.session.commit()
         await self.session.refresh(chat)
-        print(chat.avatar)
+
 
         chat_with_details = await self.chats_repo.get_chat_with_options(
             self.session, chat_sid, ChatsCustomOptions.with_all()

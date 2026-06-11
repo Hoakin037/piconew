@@ -6,6 +6,7 @@ from pydantic import model_validator
 
 from app.common.schemas import CoreSchema, Pagination, ResultBase
 from app.modules.messages.schemas import MessageResponse
+from app.common.schemas.pagination import PaginationResult
 
 
 class BaseResponse(CoreSchema):
@@ -89,5 +90,4 @@ class GetChatResponse(BaseResponse):
 
 class GetChatsResponse(BaseResponse):
     chats: list[ShortChatInfo]
-    pagination: Pagination
-    total: int
+    pagination: PaginationResult

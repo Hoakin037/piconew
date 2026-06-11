@@ -70,6 +70,8 @@ def app_fabric() -> FastAPI:
             "http://localhost:5173",
             "http://192.168.0.109",
             "http://192.168.0.109:5173",
+            "http://192.168.0.117:5173",
+            "http://192.168.0.117:5173/"
         ],
         allow_methods=["*"],
         allow_headers=["*"],

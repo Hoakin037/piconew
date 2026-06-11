@@ -78,4 +78,4 @@ async def get_current_user(
 
         return user_sid
 
-    raise HTTPException(status_code=401, detail="Токен некорректный или отсутсвует")
+    raise HTTPException(status_code=401, detail="Токен некорректный или отсутствует")

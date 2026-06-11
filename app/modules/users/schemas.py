@@ -2,6 +2,7 @@ from typing import Literal
 from uuid import UUID
 
 from app.common.schemas import CoreSchema, Pagination, ResultBase
+from app.common.schemas.pagination import PaginationResult
 
 
 class UserBase(CoreSchema):
@@ -50,5 +51,4 @@ class UserSearch(CoreSchema):
 class GetUsersResponse(CoreSchema):
     result: ResultBase
     items: list[UserResponse]
-    pagination: Pagination
-    total: int
+    pagination: PaginationResult

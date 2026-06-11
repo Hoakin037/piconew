@@ -10,6 +10,7 @@ from app.common.errors import BackendException
 from app.common.schemas import Pagination, ResultBase
 from app.database import Users, get_session
 from app.modules.files.file_service import FilesService, get_file_service
+from app.common.schemas.pagination import PaginationResult
 
 from .schemas import GetUsersResponse, UserCreate, UserDTO, UserResponse
 from .user_repo import UsersRepository, get_user_repo
@@ -76,10 +77,10 @@ class UserService:
         return GetUsersResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
             items=[UserResponse.model_validate(user) for user in users],
-            pagination=Pagination(
-                limit=pagination_params.limit, offset=pagination_params.offset
+            pagination=PaginationResult(
+                limit=pagination_params.limit, offset=pagination_params.offset, total=total,
             ),
-            total=total,
+
         )
 
     async def search_users_for_chat(
@@ -101,10 +102,9 @@ class UserService:
         return GetUsersResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
             items=[UserResponse.model_validate(user) for user in users],
-            pagination=Pagination(
-                limit=pagination_params.limit, offset=pagination_params.offset
+            pagination=PaginationResult(
+                limit=pagination_params.limit, offset=pagination_params.offset, total=total
             ),
-            total=total,
         )
 
     async def upload_user_avatar(

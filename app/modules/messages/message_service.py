@@ -120,7 +120,7 @@ class MessagesService:
         )
         message = MessageResponse(
             **new_message_db.__dict__,
-            attachments=[AttachmentBase.model_validate(file) for file in files],
+            attachments=[AttachmentBase.model_validate(file) for file in files if files],
         )
 
         message.user = UserMessage(
@@ -159,12 +159,20 @@ class MessagesService:
             self.session, chat_sid, cursor, limit + 1
         )
 
+
         has_more = len(messages) > limit
         if has_more:
             messages = messages[:limit]
 
-        items = [MessageResponse.model_validate(message) for message in messages]
+        items = [
 
+            MessageResponse(
+                **message.__dict__,
+                attachments=[AttachmentBase.model_validate(file) for file in
+                             await self.file_service.files_repo.get_files_by_ids(message.files_ids, session=self.session) if message.files_ids]
+            )
+                for message in messages
+        ]
         return GetMessagesResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
             items=items,
@@ -210,7 +218,10 @@ class MessagesService:
         )
         await self.session.commit()
 
-        response = MessageResponse.model_validate(updated_message)
+        response = MessageResponse(
+            **updated_message.__dict__,
+            attachments=[AttachmentBase.model_validate(file) for file in await self.file_service.files_repo.get_files_by_ids(updated_message.files_ids, session=self.session) if updated_message.files_ids]
+        )
 
         await self.redis_repo.cache_message(
             message.chat_sid, response.model_dump(mode="json")

@@ -14,6 +14,9 @@ class FilesRepo(BaseRepository[Files]):
     async def get_files_by_ids(
         self, files_sids: list[UUID], session: AsyncSession
     ) -> list[Files]:
+        if not files_sids:
+            return []
+
         query = select(Files).where(Files.sid.in_(files_sids))
         query = await session.execute(query)
         return query.scalars().all()
