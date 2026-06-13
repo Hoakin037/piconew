@@ -77,7 +77,7 @@ class RedisManager:
             data = await self.client.get(token_key)
             if data:
                 session_data = json.loads(data)
-                user_id = session_data.get("user_id")
+                user_id = session_data.get("user_sid")
 
                 async with self.client.pipeline(transaction=True) as pipe:
                     await pipe.delete(token_key)

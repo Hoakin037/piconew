@@ -201,8 +201,18 @@ class MessagesService:
                 result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED),
                 detail="Вы не являетесь участником чата",
             )
+        files = await self.file_service.
 
-        return MessageResponse.model_validate(message)
+        return MessageResponse(
+                **message.__dict__,
+                attachments=[
+                    AttachmentBase.model_validate(file)
+                    for file in await self.file_service.files_repo.get_files_by_ids(
+                        message.files_ids, session=self.session
+                    )
+                    if message.files_ids
+                ],
+            )
 
     async def edit_message(
         self, user_sid: UUID, message_sid: UUID, content: str

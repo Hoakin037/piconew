@@ -43,30 +43,18 @@ class AuthService:
         email: str = None,
         as_model: bool = False,
     ) -> UserDTO | Users:
-        user_get_strategy = {
-            "user_sid": await self.user_repo.get_by_sid(
-                sid=user_sid, session=self.session
-            ),
-            "username": await self.user_repo.get_user_by_username(
-                username, self.session
-            ),
-            "email": await self.user_repo.get_user_by_email(email, self.session),
-        }
-        fields = [
-            ("user_sid", user_sid),
-            ("username", username),
-            ("email", email),
-        ]
-
-        user = None
-        for key, value in fields:
-            if value is not None:
-                user = user_get_strategy.get(key, value)
+        if user_sid is not None:
+            user = await self.user_repo.get_by_sid(sid=user_sid, session=self.session)
+        elif username is not None:
+            user = await self.user_repo.get_user_by_username(username, self.session)
+        elif email is not None:
+            user = await self.user_repo.get_user_by_email(email, self.session)
 
         if user is None:
             raise BackendException(
                 status_code=401, result=ResultBase(code=CommonCodesEnum.NOT_FOUND)
             )
+
         if as_model:
             return user
 
