@@ -1,8 +1,10 @@
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import EmailStr
 
 from app.common.schemas import CoreSchema, ResultResponse
+from app.modules.files.schemas import FileInfo
 
 
 class UserLogin(CoreSchema):
@@ -20,6 +22,7 @@ class UserRegister(UserLogin):
     surname: str
     username: str
     password: str
+    birthday: datetime | None
 
 
 class UserLoginResponse(UserTokens, ResultResponse):
@@ -28,7 +31,8 @@ class UserLoginResponse(UserTokens, ResultResponse):
     surname: str
     username: str
     email: str
-    avatar: str | None
+    avatar: FileInfo | None
+    birthday: datetime | None
 
 
 class UserRefreshToken(CoreSchema):

@@ -50,7 +50,13 @@ class UserService:
         if as_model:
             return user
 
-        return UserDTO.model_validate(user)
+        return await self._map_user(user)
+
+    async def _map_user(self, user: Users, dto: bool = True) -> UserDTO | UserResponse:
+        if dto:
+            return UserDTO.model_validate(user)
+
+        return UserResponse.model_validate(user)
 
     async def create_user(self, user: UserCreate) -> UserDTO:
         user_to_create = Users(**user.model_dump())
@@ -58,7 +64,7 @@ class UserService:
         await self.session.commit()
         await self.session.refresh(user_to_create)
 
-        return UserDTO.model_validate(user_to_create)
+        return await self._map_user(user_to_create)
 
     async def search_global_users(
         self,
@@ -76,7 +82,7 @@ class UserService:
 
         return GetUsersResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
-            items=[UserResponse.model_validate(user) for user in users],
+            items=[await self._map_user(user, dto=False) for user in users],
             pagination=PaginationResult(
                 limit=pagination_params.limit,
                 offset=pagination_params.offset,
@@ -102,7 +108,7 @@ class UserService:
 
         return GetUsersResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
-            items=[UserResponse.model_validate(user) for user in users],
+            items=[await self._map_user(user, dto=False) for user in users],
             pagination=PaginationResult(
                 limit=pagination_params.limit,
                 offset=pagination_params.offset,
@@ -115,22 +121,19 @@ class UserService:
     ) -> UserResponse:
         user = await self.get_user(user_sid, as_model=True)
 
-        url = await self.file_service.upload_file(
-            file=file,
-            type="user",
-            sid=user_sid,
+        avatar = await self.file_service.create_img_file(
+            file, temp=False, sid=user_sid, type="avatar"
         )
+
         user = await self.user_repo.update(
             obj=user,
             session=self.session,
-            update_data={
-                "avatar": url,
-            },
+            update_data={"avatar": avatar.model_dump(mode="json")},
         )
         await self.session.commit()
         await self.session.refresh(user)
 
-        return UserResponse.model_validate(user)
+        return await self._map_user(user, dto=False)
 
 
 async def get_user_service(

@@ -11,6 +11,7 @@ from app.common.schemas import ResultBase
 from app.common.schemas.pagination import PaginationResult
 from app.database import Chats, get_session
 from app.modules.files.file_service import FilesService, get_file_service
+from app.modules.files.schemas import ImageInfo
 from app.modules.messages.postgres_repo import MessagesRepository, get_msg_repo
 from app.modules.messages.schemas import MessageResponse
 from app.modules.users.user_service import UserService, get_user_service
@@ -66,7 +67,11 @@ class ChatsService:
             user_sid=current_user_sid,
             session=self.session,
             chat_sid=new_chat.sid,
-            avatar="https://img.icons8.ru/?size=48&id=26089&format=png",
+            avatar=ImageInfo(
+                url="https://img.icons8.ru/?size=48&id=26089&format=png",
+                type="avatar",
+                extension="image/png",
+            ),
             chat_name=chat_name,
             role="admin",
         )
@@ -149,17 +154,18 @@ class ChatsService:
             self.session,
             user_sid=current_user_sid,
             chat_sid=new_chat.sid,
-            avatar=new_chat.avatar,
+            avatar=None,
             chat_name=new_chat.chat_name,
             role="admin",
         )
         for user in group_info.members:
             await self.chats_repo.add_participant(
                 self.session,
-                chat_sid=user,
-                avatar=new_chat.avatar,
+                chat_sid=new_chat.sid,
+                avatar=None,
                 chat_name=new_chat.chat_name,
                 role="member",
+                user_sid=user,
             )
 
         await self.session.commit()
@@ -227,14 +233,22 @@ class ChatsService:
         last_message = await self.message_repo.get_last_message_in_chat(
             session=self.session, chat_sid=chat.sid
         )
-
+        wallpaper = None
         if chat.chat_type == "personal":
-            avatar = user_chat.avatar if user_chat else None
+            avatar, wallpaper = (
+                user_chat.avatar if user_chat else None,
+                user_chat.wallpaper if user_chat else None,
+            )
         elif chat.chat_type == "chat":
             avatar = (
                 other_chat.user.avatar
                 if other_chat and other_chat.user
                 else (user_chat.avatar if user_chat else None)
+            )
+            wallpaper = (
+                other_chat.wallpaper
+                if other_chat and other_chat.user
+                else (user_chat.wallpaper if user_chat else None)
             )
         else:
             avatar = chat.avatar
@@ -247,11 +261,12 @@ class ChatsService:
                 if chat.chat_type in ("chat", "personal")
                 else chat.chat_name
             ),
-            avatar=avatar,
+            avatar=ImageInfo.model_validate(avatar) if avatar else None,
             unread_count=0,
             is_pinned=user_chat.is_pinned if user_chat else False,
             is_muted=user_chat.is_muted if user_chat else False,
             created_at=chat.created_at.isoformat() if chat.created_at else "",
+            wallpaper=ImageInfo.model_validate(avatar) if avatar else None,
             last_message=MessageResponse(**last_message.__dict__, attachments=[])
             if last_message
             else None,
@@ -275,13 +290,31 @@ class ChatsService:
             session=self.session, chat_sid=chat.sid
         )
 
+        for uc in chat.users_chats:
+            if str(uc.user_sid) == str(current_user_sid):
+                user_chat = uc
+            else:
+                other_chat = uc
+
+        last_message = await self.message_repo.get_last_message_in_chat(
+            session=self.session, chat_sid=chat.sid
+        )
+        wallpaper = None
         if chat.chat_type == "personal":
-            avatar = user_chat.avatar if user_chat else None
+            avatar, wallpaper = (
+                user_chat.avatar if user_chat else None,
+                user_chat.wallpaper if user_chat else None,
+            )
         elif chat.chat_type == "chat":
             avatar = (
                 other_chat.user.avatar
                 if other_chat and other_chat.user
                 else (user_chat.avatar if user_chat else None)
+            )
+            wallpaper = (
+                other_chat.wallpaper
+                if other_chat and other_chat.user
+                else (user_chat.wallpaper if user_chat else None)
             )
         else:
             avatar = chat.avatar
@@ -294,12 +327,13 @@ class ChatsService:
                 if chat.chat_type in ("chat", "personal")
                 else chat.chat_name
             ),
-            avatar=avatar,
+            avatar=ImageInfo.model_validate(avatar) if avatar else None,
             unread_count=0,
             participants=participants,
             is_pinned=user_chat.is_pinned if user_chat else False,
             is_muted=user_chat.is_muted if user_chat else False,
             created_at=chat.created_at.isoformat(),
+            wallpaper=ImageInfo.model_validate(wallpaper) if wallpaper else None,
             attachments=[],
             last_message=MessageResponse(**last_message.__dict__, attachments=[])
             if last_message
@@ -389,10 +423,46 @@ class ChatsService:
     ) -> GetChatResponse:
         chat = await self.get_chat_by_id(user_sid, chat_sid, as_model=True)
 
-        url = await self.file_service.upload_file(file=file, type="chat", sid=chat_sid)
+        avatar = await self.file_service.create_img_file(
+            file, temp=False, sid=chat_sid, type="avatar"
+        )
 
         chat = await self.chats_repo.update(
-            self.session, obj=chat, update_data={"avatar": url}
+            self.session,
+            obj=chat,
+            update_data={"avatar": avatar.model_dump(mode="json")},
+        )
+        await self.session.commit()
+        await self.session.refresh(chat)
+
+        chat_with_details = await self.chats_repo.get_chat_with_options(
+            self.session, chat_sid, ChatsCustomOptions.with_all()
+        )
+
+        return GetChatResponse(
+            result=ResultBase(code=CommonCodesEnum.DEFAULT),
+            chat=await self._map_chat_to_full_info(chat_with_details, user_sid),
+        )
+
+    async def set_wallpaper(
+        self, chat_sid: UUID, file: UploadFile, user_sid: UUID
+    ) -> GetChatResponse:
+        chat = await self.chats_repo.get_user_chat(
+            session=self.session, user_sid=user_sid, chat_sid=chat_sid
+        )
+        if not chat:
+            raise BackendException(
+                status_code=404, result=ResultBase(code=CommonCodesEnum.NOT_FOUND)
+            )
+
+        wallpaper = await self.file_service.create_img_file(
+            file, temp=False, sid=chat_sid, type="wallpaper"
+        )
+
+        chat = await self.chats_repo.update(
+            self.session,
+            obj=chat,
+            update_data={"wallpaper": wallpaper.model_dump(mode="json")},
         )
         await self.session.commit()
         await self.session.refresh(chat)

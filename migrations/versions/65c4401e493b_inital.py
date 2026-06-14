@@ -10,6 +10,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "65c4401e493b"
@@ -24,7 +25,7 @@ def upgrade() -> None:
     op.create_table(
         "chats",
         sa.Column("sid", sa.UUID(), nullable=False),
-        sa.Column("avatar", sa.String(length=200), nullable=True),
+        sa.Column("avatar", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("chat_type", sa.String(length=20), nullable=False),
         sa.Column("chat_name", sa.String(length=72), nullable=True),
         sa.Column(
@@ -42,7 +43,7 @@ def upgrade() -> None:
         sa.Column("surname", sa.String(length=36), nullable=False),
         sa.Column("username", sa.String(length=72), nullable=False),
         sa.Column("status", sa.String(length=72), nullable=True),
-        sa.Column("avatar", sa.String(length=200), nullable=True),
+        sa.Column("avatar", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column("email", sa.String(length=144), nullable=False),
         sa.Column("password", sa.String(length=500), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False),
@@ -84,7 +85,7 @@ def upgrade() -> None:
         sa.Column("is_pinned", sa.Boolean(), nullable=False),
         sa.Column("is_muted", sa.Boolean(), nullable=False),
         sa.Column("chat_name", sa.String(length=72), nullable=False),
-        sa.Column("avatar", sa.String(length=200), nullable=True),
+        sa.Column("avatar", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column(
             "joined_at",
             sa.DateTime(timezone=True),

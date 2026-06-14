@@ -21,6 +21,7 @@ dependencies = [
     "colorama (>=0.4.6,<0.5.0)",
     "aioboto3 (>=15.5.0,<16.0.0)",
     "python-multipart (>=0.0.32,<0.0.33)",
+    "python-magic-bin (>=0.4.14,<0.5.0)",
 ]
 
 [build-system]

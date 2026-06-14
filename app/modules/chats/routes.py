@@ -105,7 +105,7 @@ async def search_users_for_chat(
     )
 
 
-@chats.patch("/{chat_sid}", response_model=GetChatResponse)
+@chats.patch("/{chat_sid}/set_avatar", response_model=GetChatResponse)
 async def set_group_avatar(
     chat_sid: UUID = Path(),
     current_user: UUID = Depends(get_current_user),
@@ -113,6 +113,16 @@ async def set_group_avatar(
     chats_service: ChatsService = Depends(get_chats_service),
 ):
     return await chats_service.set_group_avatar(chat_sid, file, current_user)
+
+
+@chats.patch("/{chat_sid}/set_wallpeper", response_model=GetChatResponse)
+async def set_wallpaper(
+    chat_sid: UUID = Path(),
+    current_user: UUID = Depends(get_current_user),
+    file: UploadFile = File(...),
+    chats_service: ChatsService = Depends(get_chats_service),
+):
+    return await chats_service.set_wallpaper(chat_sid, file, current_user)
 
 
 @chats.post(path="/{group_sid}/add_members", response_model=GetChatResponse)

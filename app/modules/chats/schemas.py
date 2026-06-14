@@ -6,6 +6,7 @@ from pydantic import model_validator
 
 from app.common.schemas import CoreSchema, ResultBase
 from app.common.schemas.pagination import PaginationResult
+from app.modules.files.schemas import FileInfo
 from app.modules.messages.schemas import MessageResponse
 
 
@@ -39,7 +40,7 @@ class ChatParticipantUser(CoreSchema):
     surname: str
     email: str
     username: str
-    avatar: str | None
+    avatar: FileInfo | None
     status: str | None
     is_active: bool
     created_at: datetime
@@ -71,11 +72,12 @@ class ShortChatInfo(CoreSchema):
     sid: UUID
     type: Literal["personal", "group", "chat"]
     chat_name: str
-    avatar: str | None
+    avatar: FileInfo | None
     last_message: MessageResponse | None
     unread_count: int = 0
     is_pinned: bool
     is_muted: bool
+    wallpaper: FileInfo | None
     created_at: str
 
 

@@ -1,8 +1,10 @@
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
 from app.common.schemas import CoreSchema, ResultBase
 from app.common.schemas.pagination import PaginationResult
+from app.modules.files.schemas import FileInfo
 
 
 class UserBase(CoreSchema):
@@ -10,6 +12,7 @@ class UserBase(CoreSchema):
     surname: str
     username: str
     email: str
+    birthday: datetime | None
 
 
 class UserCreate(UserBase):
@@ -19,9 +22,10 @@ class UserCreate(UserBase):
 
 class UserDTO(UserBase):
     sid: UUID
-    avatar: str | None
+    avatar: FileInfo | None
     status: str | None
     is_active: bool
+    birthday: datetime | None
 
 
 class ChatParticipant(UserBase):
@@ -32,7 +36,7 @@ class ChatParticipant(UserBase):
 
 class UserResponse(UserBase):
     sid: UUID
-    avatar: str | None
+    avatar: FileInfo | None
     status: str | None
 
 
@@ -41,7 +45,7 @@ class UserMessage(CoreSchema):
     name: str
     surname: str
     username: str
-    avatar: str | None
+    avatar: FileInfo | None
 
 
 class UserSearch(CoreSchema):

@@ -80,10 +80,16 @@ class AuthService:
             email=user.email, session=self.session
         )
 
-        if any([username, email]):
+        if username:
             raise BackendException(
                 status_code=400,
-                result=ResultBase(code=CommonCodesEnum.USER_ALREADY_EXISTS),
+                result=ResultBase(code=CommonCodesEnum.USERNAME_ALREADY_EXISTS),
+            )
+
+        if email:
+            raise BackendException(
+                status_code=400,
+                result=ResultBase(code=CommonCodesEnum.EMAIL_ALREADY_IN_USE),
             )
 
         user.password = self._pwd_context.hash(user.password)

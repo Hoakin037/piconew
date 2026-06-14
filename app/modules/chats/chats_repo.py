@@ -8,6 +8,7 @@ from sqlalchemy.sql.base import ExecutableOption
 from app.database import Chats, UsersChats
 from app.database.base_repo import BaseRepository
 from app.modules.chats.consts.custom_options import ChatsCustomOptions
+from app.modules.files.schemas import ImageInfo
 
 
 class ChatsRepository(BaseRepository[Chats]):
@@ -19,7 +20,7 @@ class ChatsRepository(BaseRepository[Chats]):
         session: AsyncSession,
         user_sid: UUID,
         chat_sid: UUID,
-        avatar: str | None,
+        avatar: ImageInfo | dict | None,
         chat_name: str,
         role: str = "member",
     ) -> UsersChats:
@@ -28,8 +29,11 @@ class ChatsRepository(BaseRepository[Chats]):
             chat_sid=chat_sid,
             role=role,
             left_at=None,
-            avatar=avatar,
+            avatar=avatar.model_dump(mode="json")
+            if isinstance(avatar, ImageInfo)
+            else avatar,
             chat_name=chat_name,
+            wallpaper=None,
         )
         session.add(user_chat)
         await session.flush()
