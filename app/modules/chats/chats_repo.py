@@ -142,6 +142,15 @@ class ChatsRepository(BaseRepository[Chats]):
         result = result.scalars().first()
         return result == "admin"
 
+    async def udate_user_chat(
+        self, session: AsyncSession, obj: UsersChats, update_data: dict
+    ) -> UsersChats:
+        for key, value in update_data.items():
+            if hasattr(obj, key):
+                setattr(obj, key, value)
+        await session.flush()
+        return obj
+
 
 async def get_chats_repo():
     return ChatsRepository()

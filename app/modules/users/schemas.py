@@ -56,3 +56,10 @@ class GetUsersResponse(CoreSchema):
     result: ResultBase
     items: list[UserResponse]
     pagination: PaginationResult
+
+
+class UpdateUserInfo(CoreSchema):
+    name: str | None = None
+    surname: str | None = None
+    birthday: datetime | None = None
+    status: str | None = None

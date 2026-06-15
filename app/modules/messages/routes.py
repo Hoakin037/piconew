@@ -141,7 +141,7 @@ async def edit_message(
         user_sid=current_user, message_sid=message_sid, content=request.content
     )
     await sio_server.emit(
-        "new_message",
+        "updated_message",
         updated_message.model_dump(mode="json"),
         room=str(updated_message.chat_sid),
     )
@@ -168,7 +168,9 @@ async def delete_message(
     )
 
     await sio_server.emit(
-        "delete_message", {"message_sid": str(deleted_msg_sid)}, room=str(chat_sid)
+        "delete_message",
+        {"message_sid": str(deleted_msg_sid), "chat_sid": str(chat_sid)},
+        room=str(chat_sid),
     )
 
     return MessageDeleteResponse(message_sid=deleted_msg_sid)

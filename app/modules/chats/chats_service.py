@@ -476,6 +476,25 @@ class ChatsService:
             chat=await self._map_chat_to_full_info(chat_with_details, user_sid),
         )
 
+    async def change_chat_name(
+        self, new_name: str, chat_sid: UUID, user_sid: UUID
+    ) -> GetChatResponse:
+        chat = await self.chats_repo.get_user_chat(
+            session=self.session, user_sid=user_sid, chat_sid=chat_sid
+        )
+
+        if not chat:
+            raise BackendException(
+                status_code=404, result=ResultBase(code=CommonCodesEnum.NOT_FOUND)
+            )
+
+        await self.chats_repo.udate_user_chat(
+            session=self.session, obj=chat, update_data={"chat_name": new_name}
+        )
+        await self.session.commit()
+
+        return await self.get_chat_by_id(user_sid, chat_sid)
+
 
 async def get_chats_service(
     session: Annotated[AsyncSession, Depends(get_session)],

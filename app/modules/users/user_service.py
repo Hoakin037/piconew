@@ -12,7 +12,7 @@ from app.common.schemas.pagination import PaginationResult
 from app.database import Users, get_session
 from app.modules.files.file_service import FilesService, get_file_service
 
-from .schemas import GetUsersResponse, UserCreate, UserDTO, UserResponse
+from .schemas import GetUsersResponse, UpdateUserInfo, UserCreate, UserDTO, UserResponse
 from .user_repo import UsersRepository, get_user_repo
 
 
@@ -134,6 +134,19 @@ class UserService:
         await self.session.refresh(user)
 
         return await self._map_user(user, dto=False)
+
+    async def change_user_info(
+        self, new_info: UpdateUserInfo, user_sid: UUID
+    ) -> UserResponse:
+        user = await self.get_user(user_sid=user_sid, as_model=True)
+
+        updated_user = await self.user_repo.update(
+            obj=user,
+            session=self.session,
+            update_data=new_info.model_dump(exclude_unset=True, exclude_none=True),
+        )
+
+        return await self._map_user(updated_user, dto=False)
 
 
 async def get_user_service(

@@ -22,7 +22,7 @@ class UserRegister(UserLogin):
     surname: str
     username: str
     password: str
-    birthday: datetime | None
+    birthday: datetime | None = None
 
 
 class UserLoginResponse(UserTokens, ResultResponse):

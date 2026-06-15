@@ -26,6 +26,7 @@ class MessagesRepository(BaseRepository[Messages]):
             content=message_create.content,
             reply_message_sid=message_create.reply_message_sid,
             created_at=message_create.created_at or datetime.utcnow(),
+            files_ids=message_create.attachments,
         )
 
         await self.create(session, message)

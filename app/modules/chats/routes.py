@@ -1,9 +1,12 @@
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Path, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Path, Query, UploadFile
+from socketio import AsyncServer
 
 from app.common.consts import CommonCodesEnum
 from app.common.core.jwt import get_current_user
+from app.common.core.sio import get_sio_server
 from app.common.schemas import Pagination, ResultBase
 from app.modules.users import UserService, get_user_service
 from app.modules.users.schemas import GetUsersResponse
@@ -107,12 +110,19 @@ async def search_users_for_chat(
 
 @chats.patch("/{chat_sid}/set_avatar", response_model=GetChatResponse)
 async def set_group_avatar(
+    sio_server: Annotated[AsyncServer, Depends(get_sio_server)],
     chat_sid: UUID = Path(),
     current_user: UUID = Depends(get_current_user),
     file: UploadFile = File(...),
     chats_service: ChatsService = Depends(get_chats_service),
 ):
-    return await chats_service.set_group_avatar(chat_sid, file, current_user)
+    chat = await chats_service.set_group_avatar(chat_sid, file, current_user)
+
+    await sio_server.emit(
+        "update_chat", chat.model_dump(mode="json"), room=str(chat_sid)
+    )
+
+    return chat
 
 
 @chats.patch("/{chat_sid}/set_wallpeper", response_model=GetChatResponse)
@@ -123,6 +133,16 @@ async def set_wallpaper(
     chats_service: ChatsService = Depends(get_chats_service),
 ):
     return await chats_service.set_wallpaper(chat_sid, file, current_user)
+
+
+@chats.patch("/{chat_sid}/change_chat_name", response_model=GetChatResponse)
+async def set_wallpaper(
+    chat_sid: UUID = Path(),
+    current_user: UUID = Depends(get_current_user),
+    chat_name: str = Form(...),
+    chats_service: ChatsService = Depends(get_chats_service),
+):
+    return await chats_service.udate_user_chat(chat_name, chat_sid, current_user)
 
 
 @chats.post(path="/{group_sid}/add_members", response_model=GetChatResponse)
