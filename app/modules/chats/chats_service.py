@@ -1,14 +1,17 @@
-from random import choice
 from typing import Annotated
 from uuid import UUID
 
+from fastapi import UploadFile
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.consts import CommonCodesEnum
 from app.common.errors import BackendException
 from app.common.schemas import ResultBase
+from app.common.schemas.pagination import PaginationResult
 from app.database import Chats, get_session
+from app.modules.files.file_service import FilesService, get_file_service
+from app.modules.files.schemas import ImageInfo
 from app.modules.messages.postgres_repo import MessagesRepository, get_msg_repo
 from app.modules.messages.schemas import MessageResponse
 from app.modules.users.user_service import UserService, get_user_service
@@ -17,30 +20,12 @@ from .chats_repo import ChatsRepository
 from .consts.custom_options import ChatsCustomOptions
 from .schemas import (
     ChatParticipantUser,
+    CreateGroupRequest,
     FullChatInfo,
     GetChatResponse,
     GetChatsResponse,
-    Pagination,
     ShortChatInfo,
 )
-
-avatars = [
-    "https://static.wikia.nocookie.net/mems/images/b/b3/%D0%9E%D0%BA%D0%B0%D0%BA.webp/revision/latest/scale-to-width-down/1200?cb=20260102083423&path-prefix=ru",
-    "https://spbcult.ru/upload/iblock/7b9/9n0tc4etzlpw3t1h1021gjzhwl226j5k.jpg",
-    "https://sobakovod.club/uploads/posts/2021-12/1640661699_6-sobakovod-club-p-sobaki-sobaka-mem-8.jpg",
-    "https://i.pinimg.com/originals/6f/b7/26/6fb726d46f5894ed0c67399b8b42f4c0.jpg",
-    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRAoIwxxUyWwjjPlHfFOG7_vXwn19Muf8B8QA&s",
-    None,
-]
-
-avatars = [
-    "https://static.wikia.nocookie.net/mems/images/b/b3/%D0%9E%D0%BA%D0%B0%D0%BA.webp/revision/latest/scale-to-width-down/1200?cb=20260102083423&path-prefix=ru",
-    "https://spbcult.ru/upload/iblock/7b9/9n0tc4etzlpw3t1h1021gjzhwl226j5k.jpg",
-    "https://sobakovod.club/uploads/posts/2021-12/1640661699_6-sobakovod-club-p-sobaki-sobaka-mem-8.jpg",
-    "https://i.pinimg.com/originals/6f/b7/26/6fb726d46f5894ed0c67399b8b42f4c0.jpg",
-    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRAoIwxxUyWwjjPlHfFOG7_vXwn19Muf8B8QA&s",
-    None,
-]
 
 
 class ChatsService:
@@ -50,11 +35,13 @@ class ChatsService:
         chats_repo: ChatsRepository,
         message_repo: MessagesRepository,
         user_service: UserService,
+        file_service: FilesService,
     ):
         self.session = session
         self.chats_repo = chats_repo
         self.user_service = user_service
         self.message_repo = message_repo
+        self.file_service = file_service
 
     async def create_notes(self, current_user_sid: UUID) -> GetChatResponse:
         current_user = await self.user_service.get_user(
@@ -72,7 +59,6 @@ class ChatsService:
             session=self.session,
             obj=Chats(
                 chat_type="personal",
-                avatar="https://clck.ru/3U3BvD",
             ),
         )
         await self.session.flush()
@@ -81,7 +67,11 @@ class ChatsService:
             user_sid=current_user_sid,
             session=self.session,
             chat_sid=new_chat.sid,
-            avatar=choice(avatars),
+            avatar=ImageInfo(
+                url="https://img.icons8.ru/?size=48&id=26089&format=png",
+                type="avatar",
+                extension="image/png",
+            ),
             chat_name=chat_name,
             role="admin",
         )
@@ -92,7 +82,7 @@ class ChatsService:
 
     async def create_personal_chat(
         self, current_user_sid: UUID, receiver_sid: UUID
-    ) -> GetChatResponse:
+    ) -> tuple[GetChatResponse, GetChatResponse]:
         receiver = await self.user_service.get_user(
             user_sid=receiver_sid, as_model=True
         )
@@ -118,7 +108,7 @@ class ChatsService:
         new_chat = await self.chats_repo.create(
             session=self.session,
             obj=Chats(
-                chat_type="personal",
+                chat_type="chat",
                 avatar=None,
             ),
         )
@@ -127,8 +117,8 @@ class ChatsService:
         await self.chats_repo.add_participant(
             session=self.session,
             user_sid=current_user_sid,
-            chat_name=receiver.name + receiver.surname,
-            avatar=choice(avatars),
+            chat_name=receiver.name + " " + receiver.surname,
+            avatar=receiver.avatar,
             chat_sid=new_chat.sid,
             role="admin",
         )
@@ -136,22 +126,36 @@ class ChatsService:
             session=self.session,
             user_sid=receiver_sid,
             chat_sid=new_chat.sid,
-            chat_name=current_user.name + current_user.surname,
-            avatar=choice(avatars),
+            chat_name=current_user.name + " " + current_user.surname,
+            avatar=current_user.avatar,
             role="admin",
         )
 
         await self.session.commit()
 
-        return await self.get_chat_by_id(current_user_sid, new_chat.sid)
+        user_chat = await self.get_chat_by_id(current_user_sid, new_chat.sid)
+        other_chat = await self.get_chat_by_id(receiver_sid, new_chat.sid)
+
+        return (
+            GetChatResponse(
+                result=ResultBase(code=CommonCodesEnum.DEFAULT),
+                chat=await self._map_chat_to_full_info(new_chat, current_user_sid),
+            ),
+            GetChatResponse(
+                result=ResultBase(code=CommonCodesEnum.DEFAULT),
+                chat=await self._map_chat_to_full_info(new_chat, receiver_sid),
+            ),
+        )
 
     async def create_group_chat(
-        self, current_user_sid: UUID, chat_name: str
+        self,
+        current_user_sid: UUID,
+        group_info: CreateGroupRequest,
     ) -> GetChatResponse:
         new_chat = await self.chats_repo.create(
             session=self.session,
             obj=Chats(
-                chat_name=chat_name,
+                chat_name=group_info.chat_name,
                 chat_type="group",
                 avatar=None,
             ),
@@ -159,8 +163,22 @@ class ChatsService:
         await self.session.flush()
 
         await self.chats_repo.add_participant(
-            self.session, current_user_sid, new_chat.sid, "admin"
+            self.session,
+            user_sid=current_user_sid,
+            chat_sid=new_chat.sid,
+            avatar=None,
+            chat_name=new_chat.chat_name,
+            role="admin",
         )
+        for user in group_info.members:
+            await self.chats_repo.add_participant(
+                self.session,
+                chat_sid=new_chat.sid,
+                avatar=None,
+                chat_name=new_chat.chat_name,
+                role="member",
+                user_sid=user,
+            )
 
         await self.session.commit()
 
@@ -177,29 +195,93 @@ class ChatsService:
             chat=await self._map_chat_to_full_info(chat_with_details, current_user_sid),
         )
 
+    async def add_group_members(
+        self, group_sid: UUID, user_sid: UUID, members: list[UUID]
+    ) -> GetChatResponse:
+        chat = await self.get_chat_by_id(
+            user_sid=user_sid, chat_sid=group_sid, as_model=True
+        )
+
+        if not await self.chats_repo.check_if_user_admin(
+            chat_sid=group_sid, user_sid=user_sid, session=self.session
+        ):
+            raise BackendException(
+                status_code=403, result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED)
+            )
+
+        for user in members:
+            await self.chats_repo.add_participant(
+                self.session, user, group_sid, "member", chat_name=chat.chat_name
+            )
+
+        await self.session.commit()
+        self.session.expire_all()
+
+        chat_with_details = await self.chats_repo.get_chat_with_options(
+            self.session, group_sid, ChatsCustomOptions.with_all()
+        )
+        if not chat_with_details:
+            raise BackendException(
+                status_code=404, result=ResultBase(code=CommonCodesEnum.NOT_FOUND)
+            )
+
+        return GetChatResponse(
+            result=ResultBase(code=CommonCodesEnum.DEFAULT),
+            chat=await self._map_chat_to_full_info(chat_with_details, user_sid),
+        )
+
     async def _map_chat_to_short_info(
         self, chat: Chats, current_user_sid: UUID
     ) -> ShortChatInfo:
         user_chat = None
+        other_chat = None
+        chat_name = None
+
         for uc in chat.users_chats:
             if str(uc.user_sid) == str(current_user_sid):
                 user_chat = uc
-                break
+            else:
+                other_chat = uc
 
         last_message = await self.message_repo.get_last_message_in_chat(
             session=self.session, chat_sid=chat.sid
         )
+        wallpaper = None
+        if chat.chat_type == "personal":
+            avatar, wallpaper, chat_name = (
+                user_chat.avatar if user_chat else None,
+                user_chat.wallpaper if user_chat else None,
+                user_chat.chat_name if user_chat else None,
+            )
+        elif chat.chat_type == "chat":
+            avatar = (
+                other_chat.user.avatar
+                if other_chat and other_chat.user
+                else (user_chat.avatar if user_chat else None)
+            )
+
+            wallpaper = user_chat.wallpaper if user_chat else None
+            chat_name = (
+                other_chat.user.name + " " + other_chat.user.surname
+                if other_chat
+                else (user_chat.chat_name if user_chat else None)
+            )
+        else:
+            avatar = chat.avatar
+            chat_name = chat.chat_name
+            wallpaper = user_chat.wallpaper if user_chat else None
 
         return ShortChatInfo(
             sid=chat.sid,
             type=chat.chat_type,
-            chat_name=user_chat.chat_name,
-            avatar=user_chat.avatar,
+            chat_name=chat_name,
+            avatar=ImageInfo.model_validate(avatar) if avatar else None,
             unread_count=0,
             is_pinned=user_chat.is_pinned if user_chat else False,
             is_muted=user_chat.is_muted if user_chat else False,
             created_at=chat.created_at.isoformat() if chat.created_at else "",
-            last_message=MessageResponse.model_validate(last_message)
+            wallpaper=ImageInfo.model_validate(wallpaper) if wallpaper else None,
+            last_message=MessageResponse(**last_message.__dict__, attachments=[])
             if last_message
             else None,
         )
@@ -209,36 +291,74 @@ class ChatsService:
     ) -> FullChatInfo:
         participants = []
         user_chat = None
+        other_chat = None
+        chat_name = None
 
         for uc in chat.users_chats:
             if str(uc.user_sid) == str(current_user_sid):
                 user_chat = uc
+            else:
+                other_chat = uc
             participants.append(ChatParticipantUser.model_validate(uc))
 
-        current_user_chat = await self.chats_repo.get_user_chat(
-            session=self.session, user_sid=current_user_sid, chat_sid=chat.sid
-        )
         last_message = await self.message_repo.get_last_message_in_chat(
             session=self.session, chat_sid=chat.sid
         )
 
+        for uc in chat.users_chats:
+            if str(uc.user_sid) == str(current_user_sid):
+                user_chat = uc
+            else:
+                other_chat = uc
+
+        last_message = await self.message_repo.get_last_message_in_chat(
+            session=self.session, chat_sid=chat.sid
+        )
+        wallpaper = None
+        if chat.chat_type == "personal":
+            avatar, wallpaper, chat_name = (
+                user_chat.avatar if user_chat else None,
+                user_chat.wallpaper if user_chat else None,
+                user_chat.chat_name if user_chat else None,
+            )
+        elif chat.chat_type == "chat":
+            avatar = (
+                other_chat.user.avatar
+                if other_chat and other_chat.user
+                else (user_chat.avatar if user_chat else None)
+            )
+
+            wallpaper = user_chat.wallpaper if user_chat else None
+            chat_name = (
+                other_chat.user.name + " " + other_chat.user.surname
+                if other_chat
+                else (user_chat.chat_name if user_chat else None)
+            )
+        else:
+            avatar = chat.avatar
+            chat_name = chat.chat_name
+            wallpaper = user_chat.wallpaper if user_chat else None
+
         return FullChatInfo(
             sid=chat.sid,
             type=chat.chat_type,
-            chat_name=current_user_chat.chat_name,
-            avatar=current_user_chat.avatar,
+            chat_name=chat_name,
+            avatar=ImageInfo.model_validate(avatar) if avatar else None,
             unread_count=0,
             participants=participants,
             is_pinned=user_chat.is_pinned if user_chat else False,
             is_muted=user_chat.is_muted if user_chat else False,
             created_at=chat.created_at.isoformat(),
+            wallpaper=ImageInfo.model_validate(wallpaper) if wallpaper else None,
             attachments=[],
-            last_message=MessageResponse.model_validate(last_message)
+            last_message=MessageResponse(**last_message.__dict__, attachments=[])
             if last_message
             else None,
         )
 
-    async def get_chat_by_id(self, user_sid: UUID, chat_sid: UUID) -> GetChatResponse:
+    async def get_chat_by_id(
+        self, user_sid: UUID, chat_sid: UUID, as_model: bool = False
+    ) -> GetChatResponse | Chats:
         chat = await self.chats_repo.get_chat_with_details(self.session, chat_sid)
 
         if not chat:
@@ -255,6 +375,9 @@ class ChatsService:
                 status_code=403,
                 result=ResultBase(code=CommonCodesEnum.ACCESS_DENIED),
             )
+
+        if as_model:
+            return chat
 
         return GetChatResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
@@ -275,8 +398,7 @@ class ChatsService:
         return GetChatsResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
             chats=chat_infos,
-            pagination=Pagination(limit=limit, offset=skip),
-            total=total,
+            pagination=PaginationResult(limit=limit, offset=skip, total=total),
         )
 
     async def delete_chat(self, chat_sid: UUID, current_user_sid: UUID) -> None:
@@ -312,11 +434,89 @@ class ChatsService:
 
         await self.session.commit()
 
+    async def set_group_avatar(
+        self, chat_sid: UUID, file: UploadFile, user_sid: UUID
+    ) -> GetChatResponse:
+        chat = await self.get_chat_by_id(user_sid, chat_sid, as_model=True)
+
+        avatar = await self.file_service.create_img_file(
+            file, temp=False, sid=chat_sid, type="avatar"
+        )
+
+        chat = await self.chats_repo.update(
+            self.session,
+            obj=chat,
+            update_data={"avatar": avatar.model_dump(mode="json")},
+        )
+        await self.session.commit()
+        await self.session.refresh(chat)
+
+        chat_with_details = await self.chats_repo.get_chat_with_options(
+            self.session, chat_sid, ChatsCustomOptions.with_all()
+        )
+
+        return GetChatResponse(
+            result=ResultBase(code=CommonCodesEnum.DEFAULT),
+            chat=await self._map_chat_to_full_info(chat_with_details, user_sid),
+        )
+
+    async def set_wallpaper(
+        self, chat_sid: UUID, file: UploadFile, user_sid: UUID
+    ) -> GetChatResponse:
+        chat = await self.chats_repo.get_user_chat(
+            session=self.session, user_sid=user_sid, chat_sid=chat_sid
+        )
+        if not chat:
+            raise BackendException(
+                status_code=404, result=ResultBase(code=CommonCodesEnum.NOT_FOUND)
+            )
+
+        wallpaper = await self.file_service.create_img_file(
+            file, temp=False, sid=chat_sid, type="wallpaper"
+        )
+
+        chat = await self.chats_repo.update(
+            self.session,
+            obj=chat,
+            update_data={"wallpaper": wallpaper.model_dump(mode="json")},
+        )
+        await self.session.commit()
+        await self.session.refresh(chat)
+
+        chat_with_details = await self.chats_repo.get_chat_with_options(
+            self.session, chat_sid, ChatsCustomOptions.with_all()
+        )
+
+        return GetChatResponse(
+            result=ResultBase(code=CommonCodesEnum.DEFAULT),
+            chat=await self._map_chat_to_full_info(chat_with_details, user_sid),
+        )
+
+    async def change_chat_name(
+        self, new_name: str, chat_sid: UUID, user_sid: UUID
+    ) -> GetChatResponse:
+        chat = await self.chats_repo.get_user_chat(
+            session=self.session, user_sid=user_sid, chat_sid=chat_sid
+        )
+
+        if not chat:
+            raise BackendException(
+                status_code=404, result=ResultBase(code=CommonCodesEnum.NOT_FOUND)
+            )
+
+        await self.chats_repo.udate_user_chat(
+            session=self.session, obj=chat, update_data={"chat_name": new_name}
+        )
+        await self.session.commit()
+
+        return await self.get_chat_by_id(user_sid, chat_sid)
+
 
 async def get_chats_service(
     session: Annotated[AsyncSession, Depends(get_session)],
     user_service: Annotated[UserService, Depends(get_user_service)],
     message_repo: Annotated[MessagesRepository, Depends(get_msg_repo)],
+    file_service: Annotated[FilesService, Depends(get_file_service)],
 ) -> ChatsService:
     chats_repo = ChatsRepository()
     return ChatsService(
@@ -324,4 +524,5 @@ async def get_chats_service(
         chats_repo=chats_repo,
         user_service=user_service,
         message_repo=message_repo,
+        file_service=file_service,
     )

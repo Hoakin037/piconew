@@ -39,7 +39,9 @@ services:
     volumes:
       - pico-minio-data:/var/lib/pico-minio
       - pico-minio-storage:/data
+    command: server /data --console-address ":9001"
     restart: on-failure
+
 
 volumes:
   postgres_data:

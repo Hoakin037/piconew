@@ -33,6 +33,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     result = ResultBase(
         code=CommonCodesEnum.VALIDATION_ERROR,
     )
+    logger.exception(exc)
     return JSONResponse(status_code=422, content={"result": result.model_dump()})
 
 

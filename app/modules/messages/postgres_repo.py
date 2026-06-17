@@ -26,6 +26,7 @@ class MessagesRepository(BaseRepository[Messages]):
             content=message_create.content,
             reply_message_sid=message_create.reply_message_sid,
             created_at=message_create.created_at or datetime.utcnow(),
+            files_ids=message_create.attachments,
         )
 
         await self.create(session, message)
@@ -77,6 +78,7 @@ class MessagesRepository(BaseRepository[Messages]):
         self, session: AsyncSession, chat_sid: UUID
     ) -> Messages | None:
         """Получить последнее сообщение в чате по chat_sid."""
+
         query = (
             select(Messages)
             .where(Messages.chat_sid == chat_sid, Messages.is_deleted == False)

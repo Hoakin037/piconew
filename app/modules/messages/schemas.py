@@ -3,6 +3,7 @@ from uuid import UUID
 
 from app.common.schemas import CoreSchema, ResultBase
 from app.common.schemas.pagination import CursorPagination
+from app.modules.files import AttachmentBase
 from app.modules.users.schemas import UserMessage
 
 
@@ -14,14 +15,14 @@ class MessageSession(CoreSchema):
 
 class MessageSend(CoreSchema):
     content: str
-    attachments: list[str] = []
+    attachments: list[UUID]
     reply_to: None
 
 
 class MessageBase(CoreSchema):
     chat_sid: UUID
     content: str
-    attachments: list = []
+    attachments: list[UUID]
     reply_to: None
     sender: UserMessage
 
@@ -31,7 +32,7 @@ class MessageResponse(CoreSchema):
     chat_sid: UUID
 
     content: str
-    attachments: list[str] = []
+    attachments: list[AttachmentBase]
     reply_to: None | UUID = None
 
     user: UserMessage
@@ -45,7 +46,7 @@ class MessageCreate(CoreSchema):
     sid: UUID | None = None
     chat_sid: UUID
     sender_sid: UUID
-    attachments: list | None = []
+    attachments: list[UUID]
     content: str
     reply_message_sid: None | UUID = None
     created_at: datetime | None = None

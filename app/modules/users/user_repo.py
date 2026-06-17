@@ -74,10 +74,8 @@ class UsersRepository(BaseRepository[Users]):
             search_term = f"%{search_query}%"
             query = query.where(
                 or_(
-                    Users.username.ilike(search_term),
                     Users.name.ilike(search_term),
                     Users.surname.ilike(search_term),
-                    Users.email.ilike(search_term),
                 )
             )
 

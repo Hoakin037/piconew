@@ -1,32 +1,31 @@
-from random import choice
 from typing import Annotated
 from uuid import UUID
 
+from fastapi import UploadFile
 from fastapi.params import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.consts import CommonCodesEnum
 from app.common.errors import BackendException
 from app.common.schemas import Pagination, ResultBase
+from app.common.schemas.pagination import PaginationResult
 from app.database import Users, get_session
+from app.modules.files.file_service import FilesService, get_file_service
 
-from .schemas import GetUsersResponse, UserCreate, UserDTO, UserResponse
+from .schemas import GetUsersResponse, UpdateUserInfo, UserCreate, UserDTO, UserResponse
 from .user_repo import UsersRepository, get_user_repo
-
-avatars = [
-    "https://static.wikia.nocookie.net/mems/images/b/b3/%D0%9E%D0%BA%D0%B0%D0%BA.webp/revision/latest/scale-to-width-down/1200?cb=20260102083423&path-prefix=ru",
-    "https://spbcult.ru/upload/iblock/7b9/9n0tc4etzlpw3t1h1021gjzhwl226j5k.jpg",
-    "https://sobakovod.club/uploads/posts/2021-12/1640661699_6-sobakovod-club-p-sobaki-sobaka-mem-8.jpg",
-    "https://i.pinimg.com/originals/6f/b7/26/6fb726d46f5894ed0c67399b8b42f4c0.jpg",
-    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRAoIwxxUyWwjjPlHfFOG7_vXwn19Muf8B8QA&s",
-    None,
-]
 
 
 class UserService:
-    def __init__(self, user_repo: UsersRepository, session: AsyncSession):
+    def __init__(
+        self,
+        user_repo: UsersRepository,
+        session: AsyncSession,
+        file_service: FilesService,
+    ):
         self.user_repo = user_repo
         self.session = session
+        self.file_service = file_service
 
     async def get_user(
         self,
@@ -51,17 +50,21 @@ class UserService:
         if as_model:
             return user
 
-        return UserDTO.model_validate(user)
+        return await self._map_user(user)
+
+    async def _map_user(self, user: Users, dto: bool = True) -> UserDTO | UserResponse:
+        if dto:
+            return UserDTO.model_validate(user)
+
+        return UserResponse.model_validate(user)
 
     async def create_user(self, user: UserCreate) -> UserDTO:
-        user.avatar = choice(avatars)
-        print("aa")
         user_to_create = Users(**user.model_dump())
         await self.user_repo.create(obj=user_to_create, session=self.session)
         await self.session.commit()
         await self.session.refresh(user_to_create)
 
-        return UserDTO.model_validate(user_to_create)
+        return await self._map_user(user_to_create)
 
     async def search_global_users(
         self,
@@ -79,11 +82,12 @@ class UserService:
 
         return GetUsersResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
-            items=[UserResponse.model_validate(user) for user in users],
-            pagination=Pagination(
-                limit=pagination_params.limit, offset=pagination_params.offset
+            items=[await self._map_user(user, dto=False) for user in users],
+            pagination=PaginationResult(
+                limit=pagination_params.limit,
+                offset=pagination_params.offset,
+                total=total,
             ),
-            total=total,
         )
 
     async def search_users_for_chat(
@@ -104,16 +108,50 @@ class UserService:
 
         return GetUsersResponse(
             result=ResultBase(code=CommonCodesEnum.DEFAULT),
-            items=[UserResponse.model_validate(user) for user in users],
-            pagination=Pagination(
-                limit=pagination_params.limit, offset=pagination_params.offset
+            items=[await self._map_user(user, dto=False) for user in users],
+            pagination=PaginationResult(
+                limit=pagination_params.limit,
+                offset=pagination_params.offset,
+                total=total,
             ),
-            total=total,
         )
+
+    async def upload_user_avatar(
+        self, user_sid: UUID, file: UploadFile
+    ) -> UserResponse:
+        user = await self.get_user(user_sid, as_model=True)
+
+        avatar = await self.file_service.create_img_file(
+            file, temp=False, sid=user_sid, type="avatar"
+        )
+
+        user = await self.user_repo.update(
+            obj=user,
+            session=self.session,
+            update_data={"avatar": avatar.model_dump(mode="json")},
+        )
+        await self.session.commit()
+        await self.session.refresh(user)
+
+        return await self._map_user(user, dto=False)
+
+    async def change_user_info(
+        self, new_info: UpdateUserInfo, user_sid: UUID
+    ) -> UserResponse:
+        user = await self.get_user(user_sid=user_sid, as_model=True)
+
+        updated_user = await self.user_repo.update(
+            obj=user,
+            session=self.session,
+            update_data=new_info.model_dump(exclude_unset=True, exclude_none=True),
+        )
+
+        return await self._map_user(updated_user, dto=False)
 
 
 async def get_user_service(
     user_repo: Annotated[UsersRepository, Depends(get_user_repo)],
     session: Annotated[AsyncSession, Depends(get_session)],
+    file_service: Annotated[FilesService, Depends(get_file_service)],
 ) -> UserService:
-    return UserService(user_repo=user_repo, session=session)
+    return UserService(user_repo=user_repo, session=session, file_service=file_service)

@@ -52,10 +52,12 @@ class JWTManager:
         """
         try:
             payload = decode(
-                token, self.config.JWT_SECRET_KEY, self.config.JWT_ALGORITHM
+                token,
+                self.config.JWT_SECRET_KEY,
+                algorithms=[self.config.JWT_ALGORITHM],
             )
             user_sid = payload.get("sub")
-            return user_sid
+            return UUID(user_sid)
         except (ExpiredSignatureError, InvalidSignatureError, DecodeError):
             raise HTTPException(status_code=401, detail="Ошибка валидации jwt токена.")
 
@@ -78,4 +80,4 @@ async def get_current_user(
 
         return user_sid
 
-    raise HTTPException(status_code=401, detail="Токен некорректный или отсутсвует")
+    raise HTTPException(status_code=401, detail="Токен некорректный или отсутствует")

@@ -29,6 +29,7 @@ class BaseRepository(Generic[ModelType]):
         if custom_options:
             query = query.options(*custom_options)
 
+        await session.flush()
         result = await session.execute(query)
         return result.scalars().first()
 

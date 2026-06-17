@@ -1,21 +1,13 @@
 from datetime import datetime
-from random import choice
 from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import model_validator
 
-from app.common.schemas import CoreSchema, Pagination, ResultBase
+from app.common.schemas import CoreSchema, ResultBase
+from app.common.schemas.pagination import PaginationResult
+from app.modules.files.schemas import FileInfo
 from app.modules.messages.schemas import MessageResponse
-
-avatars = [
-    "https://static.wikia.nocookie.net/mems/images/b/b3/%D0%9E%D0%BA%D0%B0%D0%BA.webp/revision/latest/scale-to-width-down/1200?cb=20260102083423&path-prefix=ru",
-    "https://spbcult.ru/upload/iblock/7b9/9n0tc4etzlpw3t1h1021gjzhwl226j5k.jpg",
-    "https://sobakovod.club/uploads/posts/2021-12/1640661699_6-sobakovod-club-p-sobaki-sobaka-mem-8.jpg",
-    "https://i.pinimg.com/originals/6f/b7/26/6fb726d46f5894ed0c67399b8b42f4c0.jpg",
-    "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRAoIwxxUyWwjjPlHfFOG7_vXwn19Muf8B8QA&s",
-    None,
-]
 
 
 class BaseResponse(CoreSchema):
@@ -28,11 +20,16 @@ class CreateChatRequest(CoreSchema):
 
 class CreateGroupRequest(CoreSchema):
     chat_name: str
+    members: list[UUID]
+
+
+class AddGroupMembers(CoreSchema):
+    members: list[UUID]
 
 
 class UpdateChatRequest(CoreSchema):
     chat_name: str = None
-    avatar: str | None = choice(avatars)
+    avatar: str | None
     is_pinned: bool = False
     is_muted: bool = False
 
@@ -42,14 +39,14 @@ class ChatParticipantUser(CoreSchema):
     name: str
     surname: str
     email: str
-    username: str = None
-    avatar: str = choice(avatars)
-    status: str | None = None
+    username: str
+    avatar: FileInfo | None
+    status: str | None
     is_active: bool
     created_at: datetime
     role: Literal["admin", "member"]
     joined_at: str
-    left_at: str | None = None
+    left_at: str | None
 
     @model_validator(mode="before")
     @classmethod
@@ -73,13 +70,14 @@ class ChatParticipant(CoreSchema):
 
 class ShortChatInfo(CoreSchema):
     sid: UUID
-    type: Literal["personal", "group"]
+    type: Literal["personal", "group", "chat"]
     chat_name: str
-    avatar: str | None = choice(avatars)
+    avatar: FileInfo | None
     last_message: MessageResponse | None
     unread_count: int = 0
     is_pinned: bool
     is_muted: bool
+    wallpaper: FileInfo | None
     created_at: str
 
 
@@ -94,5 +92,4 @@ class GetChatResponse(BaseResponse):
 
 class GetChatsResponse(BaseResponse):
     chats: list[ShortChatInfo]
-    pagination: Pagination
-    total: int
+    pagination: PaginationResult

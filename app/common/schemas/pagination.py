@@ -6,6 +6,10 @@ class Pagination(CoreSchema):
     offset: int = 0
 
 
+class PaginationResult(Pagination):
+    total: int
+
+
 class CursorPagination(CoreSchema):
     total: int
     limit: int
