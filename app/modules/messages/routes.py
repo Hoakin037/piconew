@@ -49,6 +49,7 @@ async def connect(sid, environ, auth: dict):
         )
 
         logger.info(f"User {user_sid} connected!")
+        await sio.enter_room(sid, str(user_sid))
         return True
 
     except Exception:

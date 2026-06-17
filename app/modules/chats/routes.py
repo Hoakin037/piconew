@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Path, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Path, Query, UploadFile
 from socketio import AsyncServer
 
 from app.common.consts import CommonCodesEnum
@@ -26,20 +26,41 @@ chats = APIRouter(prefix="/chats", tags=["Chats"])
 
 @chats.post("/create_chat", status_code=201, response_model=GetChatResponse)
 async def create_chat(
+    sio_server: Annotated[AsyncServer, Depends(get_sio_server)],
     request: CreateChatRequest,
     current_user: UUID = Depends(get_current_user),
     chats_service: ChatsService = Depends(get_chats_service),
 ):
-    return await chats_service.create_personal_chat(current_user, request.receiver_id)
+    user_chat, other_chat = await chats_service.create_personal_chat(
+        current_user, request.receiver_id
+    )
+    await sio_server.emit(
+        "new_chat", user_chat.model_dump(mode="json"), room=str(current_user)
+    )
+    await sio_server.emit(
+        "new_chat", other_chat.model_dump(mode="json"), room=str(request.receiver_id)
+    )
+
+    return user_chat
 
 
 @chats.post("/create_group", status_code=201, response_model=GetChatResponse)
 async def create_group(
+    sio_server: Annotated[AsyncServer, Depends(get_sio_server)],
     request: CreateGroupRequest,
     current_user: UUID = Depends(get_current_user),
     chats_service: ChatsService = Depends(get_chats_service),
 ):
-    return await chats_service.create_group_chat(current_user, request)
+    group = await chats_service.create_group_chat(current_user, request)
+    await sio_server.emit(
+        "new_chat", group.model_dump(mode="json"), room=str(current_user)
+    )
+    for user_sid in request.members:
+        await sio_server.emit(
+            "new_chat", group.model_dump(mode="json"), room=str(user_sid)
+        )
+
+    return group
 
 
 @chats.get("/", response_model=GetChatsResponse)
@@ -119,13 +140,13 @@ async def set_group_avatar(
     chat = await chats_service.set_group_avatar(chat_sid, file, current_user)
 
     await sio_server.emit(
-        "update_chat", chat.model_dump(mode="json"), room=str(chat_sid)
+        "update_chat", chat.model_dump(mode="json"), room=str(current_user)
     )
 
     return chat
 
 
-@chats.patch("/{chat_sid}/set_wallpeper", response_model=GetChatResponse)
+@chats.patch("/{chat_sid}/set_wallpaper", response_model=GetChatResponse)
 async def set_wallpaper(
     chat_sid: UUID = Path(),
     current_user: UUID = Depends(get_current_user),
@@ -133,16 +154,6 @@ async def set_wallpaper(
     chats_service: ChatsService = Depends(get_chats_service),
 ):
     return await chats_service.set_wallpaper(chat_sid, file, current_user)
-
-
-@chats.patch("/{chat_sid}/change_chat_name", response_model=GetChatResponse)
-async def set_wallpaper(
-    chat_sid: UUID = Path(),
-    current_user: UUID = Depends(get_current_user),
-    chat_name: str = Form(...),
-    chats_service: ChatsService = Depends(get_chats_service),
-):
-    return await chats_service.udate_user_chat(chat_name, chat_sid, current_user)
 
 
 @chats.post(path="/{group_sid}/add_members", response_model=GetChatResponse)

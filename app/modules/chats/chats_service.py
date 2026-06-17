@@ -82,7 +82,7 @@ class ChatsService:
 
     async def create_personal_chat(
         self, current_user_sid: UUID, receiver_sid: UUID
-    ) -> GetChatResponse:
+    ) -> tuple[GetChatResponse, GetChatResponse]:
         receiver = await self.user_service.get_user(
             user_sid=receiver_sid, as_model=True
         )
@@ -117,7 +117,7 @@ class ChatsService:
         await self.chats_repo.add_participant(
             session=self.session,
             user_sid=current_user_sid,
-            chat_name=receiver.name + receiver.surname,
+            chat_name=receiver.name + " " + receiver.surname,
             avatar=receiver.avatar,
             chat_sid=new_chat.sid,
             role="admin",
@@ -126,14 +126,26 @@ class ChatsService:
             session=self.session,
             user_sid=receiver_sid,
             chat_sid=new_chat.sid,
-            chat_name=current_user.name + current_user.surname,
+            chat_name=current_user.name + " " + current_user.surname,
             avatar=current_user.avatar,
             role="admin",
         )
 
         await self.session.commit()
 
-        return await self.get_chat_by_id(current_user_sid, new_chat.sid)
+        user_chat = await self.get_chat_by_id(current_user_sid, new_chat.sid)
+        other_chat = await self.get_chat_by_id(receiver_sid, new_chat.sid)
+
+        return (
+            GetChatResponse(
+                result=ResultBase(code=CommonCodesEnum.DEFAULT),
+                chat=await self._map_chat_to_full_info(new_chat, current_user_sid),
+            ),
+            GetChatResponse(
+                result=ResultBase(code=CommonCodesEnum.DEFAULT),
+                chat=await self._map_chat_to_full_info(new_chat, receiver_sid),
+            ),
+        )
 
     async def create_group_chat(
         self,
@@ -223,6 +235,7 @@ class ChatsService:
     ) -> ShortChatInfo:
         user_chat = None
         other_chat = None
+        chat_name = None
 
         for uc in chat.users_chats:
             if str(uc.user_sid) == str(current_user_sid):
@@ -235,9 +248,10 @@ class ChatsService:
         )
         wallpaper = None
         if chat.chat_type == "personal":
-            avatar, wallpaper = (
+            avatar, wallpaper, chat_name = (
                 user_chat.avatar if user_chat else None,
                 user_chat.wallpaper if user_chat else None,
+                user_chat.chat_name if user_chat else None,
             )
         elif chat.chat_type == "chat":
             avatar = (
@@ -245,28 +259,28 @@ class ChatsService:
                 if other_chat and other_chat.user
                 else (user_chat.avatar if user_chat else None)
             )
-            wallpaper = (
-                other_chat.wallpaper
-                if other_chat and other_chat.user
-                else (user_chat.wallpaper if user_chat else None)
+
+            wallpaper = user_chat.wallpaper if user_chat else None
+            chat_name = (
+                other_chat.user.name + " " + other_chat.user.surname
+                if other_chat
+                else (user_chat.chat_name if user_chat else None)
             )
         else:
             avatar = chat.avatar
+            chat_name = chat.chat_name
+            wallpaper = user_chat.wallpaper if user_chat else None
 
         return ShortChatInfo(
             sid=chat.sid,
             type=chat.chat_type,
-            chat_name=(
-                user_chat.chat_name
-                if chat.chat_type in ("chat", "personal")
-                else chat.chat_name
-            ),
+            chat_name=chat_name,
             avatar=ImageInfo.model_validate(avatar) if avatar else None,
             unread_count=0,
             is_pinned=user_chat.is_pinned if user_chat else False,
             is_muted=user_chat.is_muted if user_chat else False,
             created_at=chat.created_at.isoformat() if chat.created_at else "",
-            wallpaper=ImageInfo.model_validate(avatar) if avatar else None,
+            wallpaper=ImageInfo.model_validate(wallpaper) if wallpaper else None,
             last_message=MessageResponse(**last_message.__dict__, attachments=[])
             if last_message
             else None,
@@ -278,6 +292,7 @@ class ChatsService:
         participants = []
         user_chat = None
         other_chat = None
+        chat_name = None
 
         for uc in chat.users_chats:
             if str(uc.user_sid) == str(current_user_sid):
@@ -301,9 +316,10 @@ class ChatsService:
         )
         wallpaper = None
         if chat.chat_type == "personal":
-            avatar, wallpaper = (
+            avatar, wallpaper, chat_name = (
                 user_chat.avatar if user_chat else None,
                 user_chat.wallpaper if user_chat else None,
+                user_chat.chat_name if user_chat else None,
             )
         elif chat.chat_type == "chat":
             avatar = (
@@ -311,22 +327,22 @@ class ChatsService:
                 if other_chat and other_chat.user
                 else (user_chat.avatar if user_chat else None)
             )
-            wallpaper = (
-                other_chat.wallpaper
-                if other_chat and other_chat.user
-                else (user_chat.wallpaper if user_chat else None)
+
+            wallpaper = user_chat.wallpaper if user_chat else None
+            chat_name = (
+                other_chat.user.name + " " + other_chat.user.surname
+                if other_chat
+                else (user_chat.chat_name if user_chat else None)
             )
         else:
             avatar = chat.avatar
+            chat_name = chat.chat_name
+            wallpaper = user_chat.wallpaper if user_chat else None
 
         return FullChatInfo(
             sid=chat.sid,
             type=chat.chat_type,
-            chat_name=(
-                user_chat.chat_name
-                if chat.chat_type in ("chat", "personal")
-                else chat.chat_name
-            ),
+            chat_name=chat_name,
             avatar=ImageInfo.model_validate(avatar) if avatar else None,
             unread_count=0,
             participants=participants,

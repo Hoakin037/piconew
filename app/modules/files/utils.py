@@ -11,7 +11,7 @@ ALLOWED_AVATAR_MIMES = {
     "image/jpg",
     "image/jpeg",
     "image/webp",
-    "image/mp4",
+    "video/mp4",
 }
 
 
